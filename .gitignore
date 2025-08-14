@@ -1,0 +1,53 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.Rproj.user/
+
+# Python/R
+__pycache__/
+*.py[cod]
+.Rhistory
+.RData
+.renv/
+renv/library/
+.Rproj.user/
+
+# Environments
+envs/*.lock
+*.conda
+*.Rlib
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs & scratch
+logs/
+scratch/
+tmp/
+*.log
+
+# Results / big files
+results/
+outputs/
+figures/
+reports/
+
+# Data (never commit raw data)
+data/
+*.fastq*
+*.fq*
+*.bam
+*.sam
+*.cram
+*.vcf*
+*.fna
+*.faa
+*.gz
+*.zip
+
+# Secrets
+*.key
+*.pem
+*.env
