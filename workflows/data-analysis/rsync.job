@@ -1,0 +1,20 @@
+#!/bin/bash
+#SBATCH --job-name=rsync_backup
+#SBATCH --output=rsync_backup_%j.log
+#SBATCH --time=12:00:00             
+#SBATCH --mem=8G                   
+#SBATCH --cpus-per-task=1          
+#SBATCH --mail-type=ALL       
+#SBATCH --mail-user=gould209@umn.edu   
+
+# Set source and destination paths
+SRC_DIR="/scratch.global/gould209/"
+DEST_DIR="/panfs/jay/groups/12/cmstaley/gould209/"
+RSYNC_LOG="$HOME/rsync_detail_$(date +%Y%m%d).log"
+
+echo "Starting rsync at $(date)"
+echo "Copying from $SRC_DIR to $DEST_DIR"
+
+rsync -avh --progress "$SRC_DIR" "$DEST_DIR" &> "$RSYNC_LOG"
+
+echo "rsync completed at $(date)"
