@@ -2,13 +2,6 @@
 """
 repo_sanitizer.py — scan & sanitize a repository for names, paths, IDs, and secrets,
 plus normalize *file references* to 'study' + extension (.csv, .tsv, .txt, .job, .sh, .batch, .R, .py).
-
-Official docs referenced:
-- argparse: https://docs.python.org/3/library/argparse.html
-- re: https://docs.python.org/3/library/re.html
-- json: https://docs.python.org/3/library/json.html
-- PyYAML safe_load: https://pyyaml.org/wiki/PyYAMLDocumentation
-- Jupyter nbformat (schema reference for clearing outputs): https://nbformat.readthedocs.io/en/latest/format_description.html
 """
 import argparse, re, sys, os, json
 from typing import List, Dict, Any, Tuple

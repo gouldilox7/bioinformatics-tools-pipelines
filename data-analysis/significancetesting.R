@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
-# ======================================================================
-# alphadiversity.R  —  One-stop CLI for nonparametric significance testing
-# ======================================================================
+# =============================================================================
+# significancetesting.R  —  One-stop CLI for nonparametric significance testing
+# =============================================================================
 # This script inspects your metadata and input table to pick appropriate tests automatically,
 # runs them (plus post-hoc where appropriate), and writes clean CSVs named: <input_base>_<test>_results.csv
 #

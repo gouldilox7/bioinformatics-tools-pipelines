@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-# ======================================================================
-# taxonomic_pipeline.py — Full Taxonomic Analysis Pipeline (Python)
-# ======================================================================
+# =========================================================
+# taxonomic_pipeline.py — Full Taxonomic Analysis Pipeline
+# =========================================================
 # Purpose
 # -------
 # Build Taxonomy/Genus tables from a Mothur-style .shared and .taxonomy,
@@ -189,6 +189,9 @@ def build_hierarchical_table_no_rounding(relative_df_T: pd.DataFrame, hier_cols:
 # Excel writing (xlsxwriter)
 # =========================
 
+import numpy as np
+import pandas as pd
+
 def write_excel_xlsxwriter(
     metadata_df: pd.DataFrame | None,
     taxonomy_sheet: pd.DataFrame,
@@ -216,6 +219,13 @@ def write_excel_xlsxwriter(
         Chart-only JSON (as dict). We'll normalize it to what xlsxwriter
         expects and apply when building each chart.
     """
+
+    # ---------- Helper: ensure Excel-safe values (Inf/NaN -> blank cell) ----------
+    def make_excel_safe(df: pd.DataFrame) -> pd.DataFrame:
+        # Convert ±inf to NaN, then NaN to None (xlsxwriter writes None as a blank cell)
+        df = df.replace([np.inf, -np.inf], np.nan)
+        return df.where(pd.notna(df), None)
+
     abundance, rel, rel_T, genus_cols, meta_cols = genus_tables
 
     # --- Normalize chart style (JSON -> internal dict) ------------------
@@ -270,6 +280,14 @@ def write_excel_xlsxwriter(
 
     style = normalize_chart_style(chart_style_raw or {})
 
+    # ---------- SANITIZE dataframes up-front ----------
+    abundance = make_excel_safe(abundance.copy())
+    rel       = make_excel_safe(rel.copy())
+    rel_T     = make_excel_safe(rel_T.copy())
+    if metadata_df is not None:
+        metadata_df = make_excel_safe(metadata_df.copy())
+    taxonomy_sheet = make_excel_safe(taxonomy_sheet.copy())
+
     with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
         wb = writer.book
         header_fmt = wb.add_format({'bold': True})
@@ -294,17 +312,17 @@ def write_excel_xlsxwriter(
         # Table 1: Abundance (counts)
         ws_gen.write_row(r, 0, abundance.columns, header_fmt); r += 1
         for _, row in abundance.iterrows():
-            ws_gen.write_row(r, 0, row.values); r += 1
+            ws_gen.write_row(r, 0, row.tolist()); r += 1
         r += 5
         # Table 2: Relative (%) — values are NOT rounded
         ws_gen.write_row(r, 0, rel.columns, header_fmt); r += 1
         for _, row in rel.iterrows():
-            ws_gen.write_row(r, 0, row.values); r += 1
+            ws_gen.write_row(r, 0, row.tolist()); r += 1
         r += 5
         # Table 3: Transposed + metadata
         ws_gen.write_row(r, 0, rel_T.columns, header_fmt); r += 1
         for _, row in rel_T.iterrows():
-            ws_gen.write_row(r, 0, row.values); r += 1
+            ws_gen.write_row(r, 0, row.tolist()); r += 1
 
         # Charts sheet: write tables and add charts for DEFAULT specs
         ws_ch = writer.book.add_worksheet('Charts')
@@ -313,19 +331,20 @@ def write_excel_xlsxwriter(
 
         def write_block(ws, start_row, spec, sheet_name_for_series):
             title = spec['title']
-            df = spec['df']
+            # sanitize the block’s DF before writing
+            df_safe = make_excel_safe(spec['df'].copy())
             display_title = spec.get('display_title', title)
 
-            ws.write_row(start_row, 0, df.columns, header_fmt)
-            for ridx in range(len(df)):
-                ws.write_row(start_row + 1 + ridx, 0, df.iloc[ridx].values)
+            ws.write_row(start_row, 0, df_safe.columns, header_fmt)
+            for ridx in range(len(df_safe)):
+                ws.write_row(start_row + 1 + ridx, 0, df_safe.iloc[ridx].tolist())
 
             la_col_name = 'Less abundant genera'
-            la_idx = df.columns.get_loc(la_col_name)
+            la_idx = df_safe.columns.get_loc(la_col_name)
             first_series_col = 1
             last_series_col = la_idx
 
-            n_rows = len(df)
+            n_rows = len(df_safe)
             ctype = style.get('chart_type', 'column')
             csub = style.get('chart_subtype', 'percent_stacked')
             chart = wb.add_chart({'type': ctype, 'subtype': csub})
@@ -359,7 +378,7 @@ def write_excel_xlsxwriter(
                     'categories': cats,
                     'values':     [sheet_name_for_series, start_row + 1, c, start_row + n_rows, c],
                 }
-                header_name = df.columns[c]
+                header_name = df_safe.columns[c]
                 hex_color = name_colors.get(header_name)
                 if hex_color:
                     series_kwargs['fill'] = {'color': hex_color}
@@ -375,13 +394,14 @@ def write_excel_xlsxwriter(
         for spec in charts_specs:
             row_cursor = write_block(ws_ch, row_cursor, spec, 'Charts')
 
-        # Optional ALL‑COMBOS → separate sheet
+        # Optional ALL-COMBOS → separate sheet
         if all_combos_specs:
             ws_all = writer.book.add_worksheet('All Consolidated')
             writer.sheets['All Consolidated'] = ws_all
             row_cursor_all = 0
             for spec in all_combos_specs:
                 row_cursor_all = write_block(ws_all, row_cursor_all, spec, 'All Consolidated')
+
 
 
 # =========================
