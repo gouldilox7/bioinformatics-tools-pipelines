@@ -1,13 +1,13 @@
 # Michael Gould
 
-**Bioinformatics Scientist specializing in microbiome pipelines and statistical modeling**  
+**Bioinformatics Scientist**  
 Researcher @ University of Minnesota  
 Division of Basic & Translational Research, Department of Surgery, Medical School
 
 ---
 
 ## 🧬 Research Focus
-Computational biology | Metagenomics | Microbiome | Machine learning | Data science
+Computational biology | Metagenomics | Machine learning | Data science
 
 I develop reproducible R/Python pipelines for microbiome research, focusing on:
 - Data analysis workflows for taxonomic, functional, and diversity profiling (16S & shotgun metagenomics)
