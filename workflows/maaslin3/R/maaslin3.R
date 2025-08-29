@@ -1,0 +1,3038 @@
+#!/usr/bin/env Rscript
+
+###############################################################################
+# MaAsLin 3
+
+# Copyright (c) 2025 Harvard School of Public Health
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+###############################################################################
+
+###############################################################
+# If running on the command line, load other Maaslin3 modules #
+###############################################################
+
+# this evaluates to true if script is being called directly as an executable
+if (identical(environment(), globalenv()) &&
+    !length(grep("^source\\(", sys.calls()))) {
+    # source all R in Maaslin3 package, relative to this folder
+    # same method as original maaslin
+    script_options <- commandArgs(trailingOnly = FALSE)
+    script_path <-
+        sub("--file=", "", script_options[grep("--file=", script_options)])
+    script_dir <- dirname(script_path)
+    script_name <- basename(script_path)
+    R_files <- c("study.R", "study.R", "study.R")
+    `%>%` <- dplyr::`%>%`
+
+    for (R_file in R_files)
+    {
+        if (!(R_file == script_name))
+            source(file.path(script_dir, R_file))
+    }
+}
+
+#### Set the default options ####
+
+normalization_choices <- c("TSS", "CLR", "NONE")
+transform_choices <- c("LOG", "PLOG", "NONE")
+
+correction_choices <-
+    c("BH", "holm", "hochberg", "hommel", "bonferroni", "BY")
+
+# set the default run options
+args <- list()
+args$input_data <- NULL
+args$input_metadata <- NULL
+args$output <- NULL
+args$min_abundance <- 0.0
+args$zero_threshold <- 0.0
+args$min_prevalence <- 0.0
+args$min_variance <- 0.0
+args$max_significance <- 0.1
+args$normalization <- normalization_choices[1]
+args$transform <- transform_choices[1]
+args$correction <- correction_choices[1]
+args$formula <- NULL
+args$random_effects <- NULL
+args$group_effects <- NULL
+args$ordered_effects <- NULL
+args$strata_effects <- NULL
+args$fixed_effects <- NULL
+args$feature_specific_covariate <- NULL
+args$feature_specific_covariate_name <- NULL
+args$feature_specific_covariate_record <- NULL
+args$standardize <- TRUE
+args$median_comparison_abundance <- TRUE
+args$median_comparison_prevalence <- FALSE
+args$median_comparison_abundance_threshold <- 0
+args$median_comparison_prevalence_threshold <- 0
+args$subtract_median <- FALSE
+args$warn_prevalence <- TRUE
+args$small_random_effects <- FALSE
+args$augment <- TRUE
+args$evaluate_only <- NULL
+args$unscaled_abundance <- NULL
+args$plot_summary_plot <- TRUE
+args$summary_plot_first_n <- 25
+args$coef_plot_vars <- NULL
+args$heatmap_vars <- NULL
+args$plot_associations <- TRUE
+args$max_pngs <- 30
+args$cores <- 1
+args$save_models <- FALSE
+args$save_plots_rds <- FALSE
+args$reference <- NULL
+args$summary_plot_balanced <- FALSE
+
+#### end ####
+
+#### Add command line arguments ####
+
+options <-
+    optparse::OptionParser(usage = paste(
+        "%prog",
+        "<data.tsv>",
+        "<metadata.tsv>",
+        "<output_folder>",
+        "[options]"
+    ))
+options <-
+    optparse::add_option(
+        options,
+        c("--formula"),
+        type = "character",
+        dest = "formula",
+        default = args$formula,
+        help = paste("The formula for the model",
+                    "[ Default: all variables fixed ]")
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--fixed_effects"),
+        type = "character",
+        dest = "fixed_effects",
+        default = args$fixed_effects,
+        help = paste(
+            "The fixed effects for the model,",
+            "comma-delimited for multiple effects",
+            "[ Default: all ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--reference"),
+        type = "character",
+        dest = "reference",
+        default = args$reference,
+        help = paste(
+            "The factor to use as a reference for",
+            "a variable with more than two levels",
+            "provided as a string of 'variable,reference'",
+            "semi-colon delimited for multiple variables [ Default: NA ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--random_effects"),
+        type = "character",
+        dest = "random_effects",
+        default = args$random_effects,
+        help = paste(
+            "The random effects for the model,",
+            "comma-delimited for multiple effects",
+            "[ Default: none ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--group_effects"),
+        type = "character",
+        dest = "group_effects",
+        default = args$group_effects,
+        help = paste(
+            "The group effects for the model,",
+            "comma-delimited for multiple effects",
+            "[ Default: none ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--ordered_effects"),
+        type = "character",
+        dest = "ordered_effects",
+        default = args$ordered_effects,
+        help = paste(
+            "The ordered effects for the model,",
+            "comma-delimited for multiple effects",
+            "[ Default: none ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--strata_effects"),
+        type = "character",
+        dest = "strata_effects",
+        default = args$ordered_effects,
+        help = paste(
+            "The strata effects for the model.",
+            "Only one is allowed.",
+            "[ Default: none ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--feature_specific_covariate"),
+        type = "character",
+        dest = "feature_specific_covariate",
+        default = args$feature_specific_covariate,
+        help = paste(
+            "The table to use for feature-specific",
+            "covariates. Row and column names should",
+            "match the data input."
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--feature_specific_covariate_name"),
+        type = "character",
+        dest = "feature_specific_covariate_name",
+        default = args$feature_specific_covariate,
+        help = paste("The name of the feature-specific covariate")
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--feature_specific_covariate_record"),
+        type = "character",
+        dest = "feature_specific_covariate_record",
+        default = args$feature_specific_covariate_record,
+        help = paste("Whether to include the feature-specific
+                    covariate in the outputs")
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--min_abundance"),
+        type = "double",
+        dest = "min_abundance",
+        default = args$min_abundance,
+        help = paste(
+            "The minimum abundance for each feature
+            (before normalization and transformation)",
+            "[ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--min_prevalence"),
+        type = "double",
+        dest = "min_prevalence",
+        default = args$min_prevalence,
+        help = paste(
+            "The minimum proportion of samples for which",
+            "a feature is detected at minimum abundance",
+            "[ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--zero-threshold"),
+        type = "double",
+        dest = "zero_threshold",
+        default = args$zero_threshold,
+        help = paste(
+            "The minimum abundance to be considered non-zero",
+            "[ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--min_variance"),
+        type = "double",
+        dest = "min_variance",
+        default = args$min_variance,
+        help = paste(
+            "Keep features with variances",
+            "greater than value",
+            "[ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--max_significance"),
+        type = "double",
+        dest = "max_significance",
+        default = args$max_significance,
+        help = paste("The q-value threshold for significance",
+                    "[ Default: %default ]")
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--normalization"),
+        type = "character",
+        dest = "normalization",
+        default = args$normalization,
+        help = paste(
+            "The normalization method to apply",
+            "[ Default: %default ] [ Choices:",
+            toString(normalization_choices),
+            "]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--transform"),
+        type = "character",
+        dest = "transform",
+        default = args$transform,
+        help = paste(
+            "The transform to apply [ Default: %default ] [ Choices:",
+            toString(transform_choices),
+            "]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--correction"),
+        type = "character",
+        dest = "correction",
+        default = args$correction,
+        help = paste(
+            "The correction method for computing",
+            "the q-value [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--standardize"),
+        type = "logical",
+        dest = "standardize",
+        default = args$standardize,
+        help = paste(
+            "Apply z-score so continuous metadata are on",
+            "the same scale [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--unscaled_abundance"),
+        type = "character",
+        dest = "unscaled_abundance",
+        default = args$unscaled_abundance,
+        help = paste(
+            "The table to use as an unscaled",
+            "abundance reference (the single column",
+            "name must be the same as one of the",
+            "features or 'total')"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--median_comparison_abundance"),
+        type = "logical",
+        dest = "median_comparison_abundance",
+        default = args$median_comparison_abundance,
+        help = paste(
+            "Test abundance coefficients against the median",
+            "association [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--median_comparison_prevalence"),
+        type = "logical",
+        dest = "median_comparison_prevalence",
+        default = args$median_comparison_prevalence,
+        help = paste(
+            "Test prevalence coefficients against the median",
+            "association [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--median_comparison_abundance_threshold"),
+        type = "double",
+        dest = "median_comparison_abundance_threshold",
+        default = args$median_comparison_abundance_threshold,
+        help = paste(
+            "Radius within which the median adjustment",
+            "gives a p-value of 1 [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--median_comparison_prevalence_threshold"),
+        type = "double",
+        dest = "median_comparison_prevalence_threshold",
+        default = args$median_comparison_prevalence_threshold,
+        help = paste(
+            "Radius within which the median adjustment",
+            "gives a p-value of 1 [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--subtract_median"),
+        type = "logical",
+        dest = "subtract_median",
+        default = args$subtract_median,
+        help = paste(
+            "Subtract the median from coefficients when",
+            "doing median comparisons [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--warn_prevalence"),
+        type = "logical",
+        dest = "warn_prevalence",
+        default = args$warn_prevalence,
+        help = paste(
+            "Check and warn if prevalence associations are",
+            "likely due to compositionality [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--small_random_effects"),
+        type = "logical",
+        dest = "small_random_effects",
+        default = args$small_random_effects,
+        help = paste(
+            "Replace prevalence random effects with",
+            "fixed effects because groups are small [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--augment"),
+        type = "logical",
+        dest = "augment",
+        default = args$augment,
+        help = paste(
+            "Add weighted extra 0s and 1s to avoid linear",
+            "separability [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--evaluate_only"),
+        type = "character",
+        dest = "evaluate_only",
+        default = args$evaluate_only,
+        help = paste(
+            "Whether to evaluate just the abundnace or
+            prevalence models [ Default: %default ] [ Choices:",
+            toString(c("abundance", "prevalence"),),
+            "]"
+        )
+
+    )
+
+options <-
+    optparse::add_option(
+        options,
+        c("--plot_summary_plot"),
+        type = "logical",
+        dest = "plot_summary_plot",
+        default = args$plot_summary_plot,
+        help = paste(
+            "Generate a summary plot for the significant",
+            "associations [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--summary_plot_first_n"),
+        type = "double",
+        dest = "summary_plot_first_n",
+        default = args$summary_plot_first_n,
+        help = paste(
+            "In summary plot, plot top N features with significant",
+            "associations [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--coef_plot_vars"),
+        type = "character",
+        dest = "coef_plot_vars",
+        default = args$coef_plot_vars,
+        help = paste(
+            "The variables to use in the coefficient plot",
+            "section of the summary plot provided as a",
+            "comma-separated string. Continuous variables",
+            "should match the metadata column name, and",
+            "categorical variables should be of the form:",
+            "[metadata] [level]. [ Default: NA ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--heatmap_vars"),
+        type = "character",
+        dest = "heatmap_vars",
+        default = args$coef_plot_vars,
+        help = paste(
+            "The variables to use in the heatmap",
+            "section of the summary plot provided as a",
+            "comma-separated string. Continuous variables",
+            "should match the metadata column name, and",
+            "categorical variables should be of the form:",
+            "[metadata] [level]. [ Default: NA ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--plot_associations"),
+        type = "logical",
+        dest = "plot_associations",
+        default = args$plot_associations,
+        help = paste(
+            "Generate associations plots for the significant",
+            "associations [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--max_pngs"),
+        type = "double",
+        dest = "max_pngs",
+        default = args$max_pngs,
+        help = paste(
+            "The maximum number of association plots for signficant",
+            "associations to save as png files [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--cores"),
+        type = "double",
+        dest = "cores",
+        default = args$cores,
+        help = paste(
+            "The number of R processes to",
+            "run in parallel [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--save_models"),
+        type = "logical",
+        dest = "save_models",
+        default = args$save_models,
+        help = paste(
+            "Return the full model outputs",
+            "and save to an RData file [ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--save_plots_rds"),
+        type = "logical",
+        dest = "save_plots_rds",
+        default = args$save_plots_rds,
+        help = paste(
+            "Save the plots to RDS files",
+            "[ Default: %default ]"
+        )
+    )
+options <-
+    optparse::add_option(
+        options,
+        c("--summary_plot_balanced"),
+        type = "logical",
+        dest = "summary_plot_balanced",
+        default = args$summary_plot_balanced,
+        help = paste(
+            "If coef_plot_vars is selected this will",
+            "select balanced top features [ Default: %default ]"
+        )
+    )
+
+option_not_valid_error <- function(message, valid_options) {
+    logging::logerror(paste(message, ": %s"), toString(valid_options))
+    stop("Option not valid", call. = FALSE)
+}
+
+#### end ####
+
+####################################
+# Check valid options are selected #
+####################################
+
+maaslin_check_arguments <-
+    function(feature_specific_covariate = NULL,
+            feature_specific_covariate_name = NULL,
+            feature_specific_covariate_record = NULL,
+            zero_threshold = 0,
+            normalization = 'TSS',
+            transform = 'LOG',
+            correction = 'BH',
+            warn_prevalence = TRUE,
+            evaluate_only = NULL,
+            unscaled_abundance = NULL,
+            median_comparison_abundance = TRUE) {
+        normalization <- toupper(normalization)
+        transform <- toupper(transform)
+
+        # Match variable ignoring case then set
+        # correctly as required for p.adjust
+        correction <- correction_choices[match(toupper(correction),
+                                            toupper(correction_choices))]
+
+        if (!is.null(unscaled_abundance) &&
+            median_comparison_abundance) {
+            stop_message <- paste0(
+                "`median_comparison_abundance` usually should not be ",
+                "TRUE (default) with unscaled abundances. To bypass this ",
+                "check, run the maaslin steps individually, ",
+                "skipping `maaslin_check_arguments`.")
+            stop(stop_message)
+        }
+
+        if (!((
+            is.null(feature_specific_covariate) +
+            is.null(feature_specific_covariate_name) +
+            is.null(feature_specific_covariate_record)
+        ) %in% c(0, 3))) {
+            stop_message <- paste0("`feature_specific_covariate`, ",
+                            "`feature_specific_covariate_name`, ",
+                            "and `feature_specific_covariate_record` ",
+                            "should all be null or all be non-null")
+            stop(stop_message)
+        }
+
+        # Check valid normalization option selected
+        logging::loginfo("Verifying options selected are valid")
+        if (!normalization %in% normalization_choices) {
+            option_not_valid_error(
+                paste(
+                    "Please select a normalization",
+                    "from the list of available options"
+                ),
+                toString(normalization_choices)
+            )
+        }
+
+        if (!is.null(unscaled_abundance) & normalization != 'TSS') {
+            stop("Normalization must be TSS if using unscaled abundance")
+        }
+
+        # check valid transform option selected
+        if (!transform %in% transform_choices) {
+            option_not_valid_error(
+                "Please select a transform from the list of available options",
+                toString(transform_choices)
+            )
+        }
+
+        # check valid correction method selected
+        if (!correction %in% correction_choices) {
+            option_not_valid_error(
+                paste(
+                    "Please select a correction method",
+                    "from the list of available options"
+                ),
+                toString(correction_choices)
+            )
+        }
+
+        if (normalization == 'CLR' & transform != 'NONE') {
+            stop("normalization = CLR can only be used with transform NONE")
+        }
+
+        if (transform == 'PLOG' & zero_threshold >= 0) {
+            stop_message <- paste0(
+                "transform set to PLOG, but zero_threshold is >= 0. ",
+                "Set zero_threshold to -1 to count all ",
+                "features as present and apply PLOG.")
+            stop(stop_message)
+        }
+
+        if (warn_prevalence) {
+            if (normalization == 'CLR') {
+                stop_message <- paste0("normalization = CLR can only be used ",
+                                        "with warn_prevalence FALSE")
+                stop(stop_message)
+            }
+            if (normalization != 'TSS') {
+                warn_message <- paste0("Be sure the data can be TSS normalized",
+                        " when using warn_prevalence without normalization=TSS")
+                warning(warn_message)
+            }
+            if (transform != 'LOG') {
+                stop_message <- paste0(
+                    "warn_prevalence has only been validated with ",
+                    "transform = LOG. To bypass this ",
+                    "check, run the maaslin steps individually, ",
+                    "skipping `maaslin_check_arguments`.")
+                stop(stop_message)
+            }
+            if (!is.null(evaluate_only)) {
+                stop_message <-
+                    "evaluate_only must be NULL when using warn_prevalence"
+                stop(stop_message)
+            }
+        }
+
+        if (!is.null(evaluate_only) &&
+            !evaluate_only %in% c("abundance", "prevalence")) {
+            stop("evaluate_only must be NULL, 'abundance', or 'prevalence'")
+        }
+
+        if (transform == 'PLOG' &&
+            (is.null(evaluate_only) ||
+            evaluate_only != "abundance")) {
+            stop_message <- paste0("PLOG should only be used for ",
+                                    "abundance-only modeling (evaluate_only)")
+            stop(stop_message)
+        }
+    }
+
+#####################################
+# Create log file and log arguments #
+#####################################
+
+maaslin_log_arguments <- function(input_data,
+                                input_metadata,
+                                output,
+                                formula = NULL,
+                                fixed_effects = NULL,
+                                reference = NULL,
+                                random_effects = NULL,
+                                group_effects = NULL,
+                                ordered_effects = NULL,
+                                strata_effects = NULL,
+                                feature_specific_covariate = NULL,
+                                feature_specific_covariate_name = NULL,
+                                feature_specific_covariate_record = NULL,
+                                min_abundance = 0,
+                                min_prevalence = 0,
+                                zero_threshold = 0,
+                                min_variance = 0,
+                                max_significance = 0.1,
+                                normalization = 'TSS',
+                                transform = 'LOG',
+                                correction = 'BH',
+                                standardize = TRUE,
+                                unscaled_abundance = NULL,
+                                median_comparison_abundance = TRUE,
+                                median_comparison_prevalence = FALSE,
+                                median_comparison_abundance_threshold = 0,
+                                median_comparison_prevalence_threshold = 0,
+                                subtract_median = FALSE,
+                                warn_prevalence = TRUE,
+                                small_random_effects = FALSE,
+                                augment = TRUE,
+                                evaluate_only = NULL,
+                                plot_summary_plot = TRUE,
+                                summary_plot_first_n = 25,
+                                coef_plot_vars = NULL,
+                                heatmap_vars = NULL,
+                                plot_associations = TRUE,
+                                max_pngs = 30,
+                                cores = 1,
+                                save_models = FALSE,
+                                save_plots_rds = FALSE,
+                                verbosity = 'FINEST',
+                                summary_plot_balanced = FALSE) {
+    # Allow for lower case variables
+    normalization <- toupper(normalization)
+    transform <- toupper(transform)
+
+    # Match variable ignoring case then set correctly as required for p.adjust
+    correction <- correction_choices[match(toupper(correction),
+                                        toupper(correction_choices))]
+
+    # If formula is a formula object, convert it back to a string
+    if (methods::is(formula, "formula")) {
+        formula <- paste0(trimws(deparse(formula)), collapse = " ")
+    }
+
+    # create an output folder
+    if (!file.exists(output)) {
+        logging::loginfo("Creating output folder")
+        dir.create(output)
+    }
+
+    # create log file (write info to stdout and debug level to log file)
+    # set level to finest so all log levels are reviewed
+    log_file <- file.path(output, "maaslin3.log")
+
+    # remove log file if already exists (to avoid append)
+    if (file.exists(log_file)) {
+        logging::logwarn(paste(
+            "Warning: Deleting existing log file:", log_file))
+        unlink(log_file)
+    }
+
+    logging::logReset()
+    logging::basicConfig(level = verbosity)
+    logging::addHandler(logging::writeToFile,
+                        file = log_file, level = verbosity)
+    logging::setLevel(20, logging::getHandler('basic.stdout'))
+
+    logging::loginfo("Writing function arguments to log file")
+    logging::logdebug("Function arguments")
+    if (is.character(input_data)) {
+        logging::logdebug("Input data file: %s", input_data)
+    }
+    if (is.character(input_metadata)) {
+        logging::logdebug("Input metadata file: %s", input_metadata)
+    }
+    logging::logdebug("Output folder: %s", output)
+    logging::logdebug("Formula: %s", formula)
+    logging::logdebug("Fixed effects: %s", fixed_effects)
+    logging::logdebug("Reference: %s", reference)
+    logging::logdebug("Random effects: %s", random_effects)
+    logging::logdebug("Group effects: %s", group_effects)
+    logging::logdebug("Ordered effects: %s", ordered_effects)
+    logging::logdebug("Strata effects: %s", strata_effects)
+    if (!is.null(feature_specific_covariate)) {
+        if (is.character(feature_specific_covariate)) {
+            logging::logdebug("Feature specific covariate: %s",
+                                feature_specific_covariate)
+        }
+    }
+    if (!is.null(feature_specific_covariate_name)) {
+        if (is.character(feature_specific_covariate_name)) {
+            logging::logdebug("Feature specific covariate name: %s",
+                            feature_specific_covariate_name)
+        }
+    }
+    if (!is.null(feature_specific_covariate_record)) {
+        if (is.character(feature_specific_covariate_record)) {
+            logging::logdebug(
+                "Feature specific covariate include: %s",
+                feature_specific_covariate_record
+            )
+        }
+    }
+    logging::logdebug("Min Abundance: %f", min_abundance)
+    logging::logdebug("Min Prevalence: %f", min_prevalence)
+    logging::logdebug("Zero Threshold: %f", zero_threshold)
+    logging::logdebug("Min variance: %f", min_variance)
+    logging::logdebug("Max significance: %f", max_significance)
+    logging::logdebug("Normalization: %s", normalization)
+    logging::logdebug("Transform: %s", transform)
+    logging::logdebug("Correction method: %s", correction)
+    logging::logdebug("Standardize: %s", standardize)
+    if (is.character(unscaled_abundance)) {
+        logging::logdebug("Unscaled abundance: %s", unscaled_abundance)
+    }
+    logging::logdebug("Abundance median comparison: %s",
+                        median_comparison_abundance)
+    logging::logdebug("Prevalence median comparison: %s",
+                        median_comparison_prevalence)
+    logging::logdebug(
+        "Abundance median comparison threshold: %s",
+        median_comparison_abundance_threshold
+    )
+    logging::logdebug(
+        "Prevalence median comparison threshold: %s",
+        median_comparison_prevalence_threshold
+    )
+    logging::logdebug(
+        "Subtract median: %s",
+        subtract_median
+    )
+    logging::logdebug(
+        "Warn prevalence: %s",
+        warn_prevalence
+    )
+    logging::logdebug(
+        "Small random effects: %s",
+        small_random_effects
+    )
+    logging::logdebug("Augment: %s", augment)
+    logging::logdebug("Evaluate only: %s", evaluate_only)
+    logging::logdebug("Cores: %d", cores)
+    logging::logdebug("Balanced Summary plot: %s", summary_plot_balanced)
+
+
+    maaslin_check_arguments(
+        feature_specific_covariate,
+        feature_specific_covariate_name,
+        feature_specific_covariate_record,
+        zero_threshold,
+        normalization,
+        transform,
+        correction,
+        warn_prevalence,
+        evaluate_only,
+        unscaled_abundance,
+        median_comparison_abundance
+    )
+}
+
+#################################
+# Read in the data and metadata #
+#################################
+
+maaslin_read_data <- function(input_data,
+                            input_metadata,
+                            feature_specific_covariate = NULL,
+                            unscaled_abundance = NULL) {
+    # if a character string then this is a file name, else it
+    # is a data frame
+    if (is.character(input_data) && file.exists(input_data)) {
+        data <- read.table(input_data,
+            header = TRUE,
+            row.names = 1, 
+            sep = ifelse(grepl('\\.tsv$|\\.txt$', input_data),  '\t', ','),
+            check.names = FALSE)
+    } else if (is.data.frame(input_data)) {
+        if (!tibble::has_rownames(input_data)) {
+            stop("If supplying input_data as a data frame,
+                it must have appropriate rownames!")
+        }
+        rownames_tmp <- rownames(input_data)
+        data <- as.data.frame(input_data) # in case it's a tibble or something
+        rownames(data) <- rownames_tmp
+    } else if (inherits(input_data, 'DataFrame')) {
+        data <- as.data.frame(input_data) # If it's BioC's DataFrame
+    } else if (is.matrix(input_data)) {
+        logging::logwarn("Input is a matrix,
+                        passing through as.data.frame() .")
+        data <- as.data.frame(input_data)
+    } else {
+        stop("input_data is neither a file nor a data frame!")
+    }
+
+    if (is.character(input_metadata) &&
+        file.exists(input_metadata)) {
+        metadata <- read.table(input_metadata,
+            header = TRUE,
+            row.names = 1, 
+            sep = ifelse(grepl('\\.tsv$|\\.txt$', input_data),  '\t', ','),
+            check.names = FALSE)
+    } else if (is.data.frame(input_metadata)) {
+        if (!tibble::has_rownames(input_metadata)) {
+            stop(
+                "If supplying input_metadata as a data frame,
+                it must have appropriate rownames!"
+            )
+        }
+        # in case it's a tibble or something
+        rownames_tmp <- rownames(input_metadata)
+        metadata <- as.data.frame(input_metadata)
+        rownames(metadata) <- rownames_tmp
+    } else if (inherits(metadata, 'DataFrame')) {
+        metadata <- as.data.frame(input_metadata) # If it's BioC's DataFrame
+    } else {
+        stop("input_metadata is neither a file nor a data frame!")
+    }
+
+    if (is.character(unscaled_abundance) &&
+        file.exists(unscaled_abundance)) {
+        unscaled_abundance <-
+            read.table(unscaled_abundance,
+                header = TRUE,
+                row.names = 1, 
+                sep = ifelse(grepl('\\.tsv$|\\.txt$', input_data),  '\t', ','),
+                check.names = FALSE)
+    } else if (is.data.frame(unscaled_abundance)) {
+        if (!tibble::has_rownames(unscaled_abundance)) {
+            stop(
+                "If supplying unscaled_abundance as a data frame,
+                it must have appropriate rownames!"
+            )
+        }
+        rownames_tmp <- rownames(unscaled_abundance)
+        unscaled_abundance <- as.data.frame(unscaled_abundance)
+        rownames(unscaled_abundance) <- rownames_tmp
+    } else if (inherits(unscaled_abundance, 'DataFrame')) {
+        unscaled_abundance <-
+            as.data.frame(unscaled_abundance) # If it's BioC's DataFrame
+    } else if (!is.null(unscaled_abundance)) {
+        stop("unscaled_abundance is not a file or data frame!")
+    }
+
+    if (is.character(feature_specific_covariate) &&
+        file.exists(feature_specific_covariate)) {
+        feature_specific_covariate <-
+            read.table(feature_specific_covariate,
+                header = TRUE,
+                row.names = 1, 
+                sep = ifelse(grepl('\\.tsv$|\\.txt$', input_data),  '\t', ','),
+                check.names = FALSE)
+    } else if (is.data.frame(feature_specific_covariate)) {
+        if (!tibble::has_rownames(feature_specific_covariate)) {
+            stop(
+                "If supplying feature_specific_covariate as a data frame,
+                it must have appropriate rownames!"
+            )
+        }
+        rownames_tmp <- rownames(feature_specific_covariate)
+        feature_specific_covariate <-
+            as.data.frame(feature_specific_covariate)
+        rownames(feature_specific_covariate) <- rownames_tmp
+    } else if (inherits(feature_specific_covariate, 'DataFrame')) {
+        feature_specific_covariate <-
+            as.data.frame(feature_specific_covariate) # If it's BioC's DataFrame
+    } else if (!is.null(feature_specific_covariate)) {
+        stop("feature_specific_covariate is not a file or data frame!")
+    }
+
+    return(
+        list(
+            "data" = data,
+            "metadata" = metadata,
+            "feature_specific_covariate" = feature_specific_covariate,
+            "unscaled_abundance" = unscaled_abundance
+        )
+    )
+}
+
+###############################################################
+# Determine orientation of data in input and reorder to match #
+###############################################################
+
+maaslin_reorder_data <- function(data,
+                                metadata,
+                                feature_specific_covariate = NULL,
+                                unscaled_abundance = NULL) {
+    logging::loginfo("Determining format of input files")
+    samples_row_row <- intersect(rownames(data), rownames(metadata))
+    if (length(samples_row_row) > 0) {
+        # this is the expected formatting so do not modify data frames
+        logging::loginfo(paste(
+            "Input format is data samples",
+            "as rows and metadata samples as rows"
+        ))
+    } else {
+        samples_column_row <- intersect(colnames(data), rownames(metadata))
+
+        if (length(samples_column_row) == 0) {
+            samples_column_row <-
+                intersect(colnames(data), rownames(metadata))
+        }
+
+        if (length(samples_column_row) > 0) {
+            logging::loginfo(
+                paste(
+                    "Input format is data samples",
+                    "as columns and metadata samples as rows"
+                )
+            )
+            # transpose data frame so samples are rows
+            data <- as.data.frame(t(data))
+            logging::logdebug("Transformed data so samples are rows")
+        } else {
+            samples_column_column <-
+                intersect(colnames(data), colnames(metadata))
+            if (length(samples_column_column) > 0) {
+                logging::loginfo(
+                    paste(
+                        "Input format is data samples",
+                        "as columns and metadata samples as columns"
+                    )
+                )
+                data <- as.data.frame(BiocGenerics::t(data))
+                metadata <- as.data.frame(BiocGenerics::t(metadata))
+                logging::logdebug("Transformed data and metadata
+                                so samples are rows")
+            } else {
+                samples_row_column <-
+                    intersect(rownames(data), colnames(metadata))
+
+                if (length(samples_row_column) == 0) {
+                    samples_row_column <-
+                        intersect(rownames(data), colnames(metadata))
+                }
+
+                if (length(samples_row_column) > 0) {
+                    logging::loginfo(
+                        paste(
+                            "Input format is data samples",
+                            "as rows and metadata samples as columns"
+                        )
+                    )
+                    metadata <- as.data.frame(BiocGenerics::t(metadata))
+                    logging::logdebug("Transformed metadata so
+                                    samples are rows")
+                } else {
+                    logging::logerror(
+                        paste(
+                            "Unable to find samples in data and",
+                            "metadata files.",
+                            "Rows/columns do not match."
+                        )
+                    )
+                    logging::logdebug("Data rows: %s",
+                                    paste(rownames(data), collapse = ","))
+                    logging::logdebug("Data columns: %s",
+                                    paste(colnames(data), collapse = ","))
+                    logging::logdebug("Metadata rows: %s",
+                                    paste(rownames(metadata), collapse = ","))
+                    logging::logdebug("Metadata columns: %s",
+                                    paste(colnames(data), collapse = ","))
+                    stop()
+                }
+            }
+        }
+    }
+
+    if (!is.null(feature_specific_covariate)) {
+        samples_row_row <-
+            intersect(rownames(data),
+                    rownames(feature_specific_covariate))
+        samples_col_col <-
+            intersect(colnames(data),
+                    colnames(feature_specific_covariate))
+        if (length(samples_row_row) > 0 &
+            length(samples_col_col) > 0) {
+            # this is the expected formatting so do not modify data frames
+            logging::loginfo(
+                paste(
+                    "Input format is data samples",
+                    "as rows and feature_specific_covariate samples as rows"
+                )
+            )
+        } else {
+            samples_column_row <-
+                intersect(colnames(data),
+                        rownames(feature_specific_covariate))
+            samples_row_column <-
+                intersect(rownames(data),
+                        colnames(feature_specific_covariate))
+
+            if (length(samples_column_row) == 0 |
+                length(samples_row_column) == 0) {
+                samples_column_row <-
+                    intersect(colnames(data),
+                            rownames(feature_specific_covariate))
+                samples_row_column <-
+                    intersect(rownames(data),
+                            colnames(feature_specific_covariate))
+            }
+
+            if (length(samples_column_row) > 0 &
+                length(samples_row_column) > 0) {
+                logging::loginfo(
+                    paste(
+                        "Input format is feature_specific_covariate samples",
+                        "as columns"
+                    )
+                )
+                # transpose data frame so samples are rows
+                feature_specific_covariate <-
+                    as.data.frame(BiocGenerics::t(feature_specific_covariate))
+                logging::logdebug("Transformed feature_specific_covariate
+                                so samples are rows")
+            } else {
+                logging::logerror(
+                    paste(
+                        "Unable to find samples in feature_specific_covariate.",
+                        "Rows/columns do not match."
+                    )
+                )
+                logging::logdebug("Data rows: %s",
+                                paste(rownames(data), collapse = ","))
+                logging::logdebug("Data columns: %s",
+                                paste(colnames(data), collapse = ","))
+                logging::logdebug(
+                    "Feature specific covariate rows: %s",
+                    paste(
+                        rownames(feature_specific_covariate),
+                        collapse = ","
+                    )
+                )
+                logging::logdebug(
+                    "Feature specific covariate columns: %s",
+                    paste(
+                        colnames(feature_specific_covariate),
+                        collapse = ","
+                    )
+                )
+                stop()
+            }
+        }
+
+    }
+
+    # get a set of the samples with both metadata and features
+    intersect_samples <-
+        intersect(rownames(data), rownames(metadata))
+    logging::logdebug(
+        "A total of %s samples were found in both the data and metadata",
+        length(intersect_samples)
+    )
+
+    if (!is.null(feature_specific_covariate)) {
+        intersect_samples <-
+            intersect(intersect_samples,
+                    rownames(feature_specific_covariate))
+        logging::logdebug(
+            "A total of %s samples were found in the data, metadata,
+            and feature specific covariates",
+            length(intersect_samples)
+        )
+    }
+
+    # check for samples without metadata
+    extra_feature_samples <-
+        setdiff(rownames(data), intersect_samples)
+    if (length(extra_feature_samples) > 0)
+        logging::loginfo(
+            paste(
+                "The following samples were found",
+                "to have features but no metadata",
+                "(or feature specific covariates if",
+                "applicable).",
+                "They will be removed. %s"
+            ),
+            paste(extra_feature_samples, collapse = ",")
+        )
+
+    # check for metadata samples without features
+    extra_metadata_samples <-
+        setdiff(rownames(metadata), intersect_samples)
+    if (length(extra_metadata_samples) > 0)
+        logging::loginfo(
+            paste(
+                "The following samples were found",
+                "to have metadata but no features",
+                "(or feature specific covariates if",
+                "applicable).",
+                "They will be removed. %s"
+            ),
+            paste(extra_metadata_samples, collapse = ",")
+        )
+
+    if (!is.null(feature_specific_covariate)) {
+        extra_feature_specific_covariate_samples <-
+            setdiff(rownames(feature_specific_covariate),
+                    intersect_samples)
+        if (length(extra_feature_specific_covariate_samples) > 0)
+            logging::loginfo(
+                paste(
+                    "The following samples were found",
+                    "to have feature specific covariates",
+                    "but no features or no metadata.",
+                    "They will be removed. %s"
+                ),
+                paste(extra_feature_specific_covariate_samples, collapse = ",")
+            )
+    }
+
+    if (!is.null(unscaled_abundance)) {
+        extra_unscaled_abundance_samples <-
+            setdiff(rownames(unscaled_abundance), rownames(data))
+        if (length(extra_unscaled_abundance_samples) > 0)
+            logging::logdebug(
+                paste(
+                    "The following samples were found",
+                    "to have unscaled abundances but no features.",
+                    "They will be removed. %s"
+                ),
+                paste(extra_unscaled_abundance_samples, collapse = ",")
+            )
+    }
+
+    if (!is.null(unscaled_abundance))  {
+        if (!all(rownames(data) %in% rownames(unscaled_abundance))) {
+            stop("some data samples do not have an unscaled abundance")
+        } else if (length(colnames(unscaled_abundance)) > 1) {
+            stop("there is more than 1 column in
+                the unscaled abundance data frame")
+        } else if (colnames(unscaled_abundance) %in% colnames(data)) {
+            logging::logdebug("Using unscaled abundance as spike-in feature")
+        } else if (colnames(unscaled_abundance) == 'total') {
+            logging::logdebug("Using unscaled abundance as total abundances")
+        } else {
+            stop("unscaled abundance column must be a feature name or 'total'")
+        }
+    }
+
+    # now order both data and metadata with the same sample ordering
+    logging::logdebug("Reordering data/metadata to use same sample ordering")
+    data <- data[intersect_samples, , drop = FALSE]
+    metadata <- metadata[intersect_samples, , drop = FALSE]
+
+    if (!is.null(unscaled_abundance)) {
+        unscaled_abundance <-
+            unscaled_abundance[intersect_samples, , drop = FALSE]
+    }
+
+    if (!is.null(feature_specific_covariate)) {
+        feature_specific_covariate <-
+            feature_specific_covariate[intersect_samples, , drop = FALSE]
+    }
+
+    return(
+        list(
+            "data" = data,
+            "metadata" = metadata,
+            "feature_specific_covariate" = feature_specific_covariate,
+            "unscaled_abundance" = unscaled_abundance
+        )
+    )
+}
+
+###########################################
+# Compute the formula based on user input #
+###########################################
+
+maaslin_compute_formula <- function(data,
+                                    metadata,
+                                    fixed_effects = NULL,
+                                    random_effects = NULL,
+                                    group_effects = NULL,
+                                    ordered_effects = NULL,
+                                    strata_effects = NULL,
+                                    feature_specific_covariate_name = NULL) {
+    random_effects_formula <- NULL
+    # use all metadata if no fixed effects are provided
+    if (is.null(fixed_effects)) {
+        if (is.null(ordered_effects) & is.null(group_effects) & 
+            is.null(feature_specific_covariate_name) & 
+            is.null(strata_effects)) {
+            fixed_effects <- colnames(metadata)
+        }
+    } else {
+        fixed_effects <- unlist(strsplit(fixed_effects, ",", fixed = TRUE))
+        # remove any fixed effects not found in metadata names
+        to_remove <- setdiff(fixed_effects, colnames(metadata))
+        if (length(to_remove) > 0) {
+            logging::logerror(
+                paste(
+                    "Variable name not found in metadata",
+                    "so not applied to formula as fixed effect: %s"
+                ),
+                paste(to_remove, collapse = " , ")
+            )
+            stop()
+        }
+    }
+
+    if (!is.null(random_effects)) {
+        random_effects <-
+            unlist(strsplit(random_effects, ",", fixed = TRUE))
+
+        common_variables <- intersect(fixed_effects, random_effects)
+        if (length(common_variables) > 0) {
+            logging::logwarn(
+                paste(
+                    "Feature name included as fixed and random effect,",
+                    "check that this is intended: %s"
+                ),
+                paste(common_variables, collapse = " , ")
+            )
+        }
+
+        # remove any random effects not found in metadata
+        to_remove <- setdiff(random_effects, colnames(metadata))
+        if (length(to_remove) > 0) {
+            logging::logerror(
+                paste(
+                    "Effect name not found in metadata",
+                    "so not applied to formula as random effect: %s"
+                ),
+                paste(to_remove, collapse = " , ")
+            )
+            stop()
+        }
+
+        # Create formula
+        if (length(random_effects) > 0) {
+            random_effects_formula_text <-
+                paste("expr ~ (1 | ",
+                    paste(
+                        ifelse(random_effects == make.names(random_effects), 
+                            random_effects, 
+                            paste0('`', random_effects, '`')),
+                        ")",
+                        sep = '',
+                        collapse = " + (1 | "
+                    ),
+                    sep = '')
+            logging::loginfo("Formula for random effects: %s",
+                            random_effects_formula_text)
+            random_effects_formula <-
+                tryCatch(
+                    as.formula(random_effects_formula_text),
+                    error = function(e)
+                        stop(
+                            sprintf(
+                                "Invalid formula for random effects: %s",
+                                random_effects_formula_text
+                            )
+                        )
+                )
+        }
+    }
+
+    if (!is.null(group_effects) | !is.null(ordered_effects)) {
+        multi_effects <- c()
+        if (!is.null(group_effects)) {
+            multi_effects <-
+                c(multi_effects,
+                strsplit(group_effects, ",", fixed = TRUE))
+        }
+        if (!is.null(ordered_effects)) {
+            multi_effects <-
+                c(multi_effects,
+                strsplit(ordered_effects, ",", fixed = TRUE))
+        }
+
+        common_variables <- intersect(fixed_effects, multi_effects)
+        if (length(common_variables) > 0) {
+            logging::logerror(
+                paste(
+                    "Feature name included as fixed and group/ordered effect,",
+                    "this is not allowed: %s"
+                ),
+                paste(common_variables, collapse = " , ")
+            )
+            stop()
+        }
+
+        # remove any random effects not found in metadata
+        to_remove <- setdiff(multi_effects, colnames(metadata))
+        if (length(to_remove) > 0) {
+            logging::logerror(paste0(
+                "Effect name not found in metadata: ",
+                paste0(to_remove, collapse = ", ")
+            ))
+            stop()
+        }
+    }
+
+    if (length(fixed_effects) == 0 &
+        length(group_effects) == 0 &
+        length(ordered_effects) == 0 &
+        is.null(feature_specific_covariate_name)) {
+        logging::logerror("No /path/to/input_dir
+                        feature-specific effects provided.")
+        stop()
+    }
+
+    # reduce metadata to only include fixed/group/random effects in formula
+    effects_names <-
+        unique(
+            c(
+                fixed_effects,
+                random_effects,
+                group_effects,
+                ordered_effects,
+                strata_effects
+            )
+        )
+    metadata <- metadata[, effects_names, drop = FALSE]
+
+    # create the fixed effects formula text
+    formula_effects <- ifelse(fixed_effects == make.names(fixed_effects), 
+        fixed_effects, 
+        paste0('`', fixed_effects, '`'))
+    if (length(group_effects) > 0) {
+        formula_effects <-
+            union(formula_effects, paste0("group(", 
+                ifelse(group_effects == make.names(group_effects), 
+                group_effects, 
+                paste0('`', group_effects, '`')), ")"))
+    }
+    if (length(ordered_effects) > 0) {
+        formula_effects <-
+            union(formula_effects,
+                paste0("ordered(", 
+                    ifelse(ordered_effects == make.names(ordered_effects), 
+                    ordered_effects, 
+                    paste0('`', ordered_effects, '`')), ")"))
+    }
+    if (length(strata_effects) > 0) {
+        formula_effects <-
+            union(formula_effects,
+                paste0("strata(", 
+                    ifelse(strata_effects == make.names(strata_effects), 
+                        strata_effects, 
+                        paste0('`', strata_effects, '`')), ")"))
+    }
+    if (!is.null(feature_specific_covariate_name)) {
+        formula_effects <-
+            union(formula_effects, feature_specific_covariate_name)
+    }
+
+    formula_text <-
+        paste("expr ~ ", paste(formula_effects, collapse = " + "))
+    logging::loginfo("Formula for fixed effects: %s", formula_text)
+    formula <-
+        tryCatch(
+            as.formula(formula_text),
+            error = function(e)
+                stop(
+                    sprintf(
+                        "Invalid formula. Please provide
+                        a different formula: %s",
+                        formula_text
+                    )
+                )
+        )
+
+    if (!(is.null(random_effects_formula))) {
+        formula <-
+            paste('. ~',
+                paste(formula_effects, collapse = ' + '),
+                '.',
+                sep = ' + ')
+        formula <- update(random_effects_formula, formula)
+    }
+
+    return(list(
+        "formula" = formula,
+        "random_effects_formula" = random_effects_formula
+    ))
+}
+
+##############################
+# Check a user input formula #
+##############################
+
+maaslin_check_formula <- function(data,
+                                metadata,
+                                input_formula = NULL,
+                                feature_specific_covariate_name = NULL) {
+    if (methods::is(input_formula, "formula")) {
+        input_formula <-
+            paste0(trimws(deparse(input_formula)), collapse = " ")
+    }
+
+    random_effects_formula <- NULL
+
+    if (is.null(input_formula)) {
+        logging::logerror(paste("No user formula provided"))
+    }
+
+    # Remove anything before the tilde if necessary
+    input_formula <- sub(".*~\\s*", "", input_formula)
+
+    if (!is.null(feature_specific_covariate_name)) {
+        if (length(input_formula) == 0 || 
+            !grepl(feature_specific_covariate_name, input_formula)) {
+            if (!is.null(input_formula) && length(input_formula) > 0 && 
+                nchar(input_formula) > 0) {
+                input_formula <-
+                    paste0("expr ~ ",
+                        feature_specific_covariate_name,
+                        ' + ',
+                        input_formula)
+            } else {
+                input_formula <-
+                    paste0("expr ~ ",
+                           feature_specific_covariate_name)
+            }
+        } else {
+            input_formula <- paste0("expr ~ ", input_formula)
+        }
+    } else {
+        input_formula <- paste0("expr ~ ", input_formula)
+    }
+
+    formula <-
+        tryCatch(
+            as.formula(input_formula),
+            error = function(e)
+                stop(sprintf("Invalid formula: %s",
+                            input_formula))
+        )
+
+    formula_terms <- all.vars(formula)
+    formula_terms <-
+        formula_terms[!formula_terms %in% c("expr",
+                                            feature_specific_covariate_name)]
+
+    to_remove <- setdiff(formula_terms, colnames(metadata))
+    if (length(to_remove) > 0) {
+        logging::logerror(
+            paste("Effect name not found in metadata: %s"),
+            paste(to_remove, collapse = ", ")
+        )
+        stop()
+    }
+
+    term_labels <- attr(terms(formula), "term.labels")
+
+    if (sum(!grepl("strata\\(|\\|", term_labels)) == 0 &
+        is.null(feature_specific_covariate_name)) {
+        logging::logerror("No fixed, group, or
+                        ordered effects included in formula.")
+        stop()
+    }
+
+    # Create formula
+    if (sum(grepl("/path/to/input_dir|", term_labels)) > 0) {
+        random_effects_formula <- formula
+    } else {
+        random_effects_formula <- NULL
+    }
+
+    return(list(
+        "formula" = formula,
+        "random_effects_formula" = random_effects_formula
+    ))
+}
+
+#################
+# Normalization #
+#################
+
+maaslin_normalize <- function(data,
+                            output,
+                            zero_threshold = 0,
+                            normalization = 'TSS',
+                            unscaled_abundance = NULL) {
+    features <- data
+
+    match.arg(normalization, normalization_choices)
+
+    normalization <- toupper(normalization)
+
+    logging::loginfo("Running selected normalization method: %s", normalization)
+
+    if (normalization == 'TSS') {
+        features <- TSSnorm(features, zero_threshold)
+    }
+    if (normalization == 'CLR') {
+        features <- CLRnorm(features, zero_threshold)
+    }
+    if (normalization == 'NONE') {
+        features <- NONEnorm(features, zero_threshold)
+    }
+
+    if (!is.null(unscaled_abundance)) {
+        features <-
+            UNSCALEDnorm(features, unscaled_abundance, zero_threshold)
+    }
+
+    if (!is.null(output)) {
+        features_folder <- file.path(output, "features")
+        if (!file.exists(features_folder)) {
+            logging::loginfo("Creating output feature tables folder")
+            dir.create(features_folder, recursive = TRUE)
+        }
+
+        data_norm_file <- file.path(features_folder, "study.tsv")
+        logging::loginfo("Writing normalized data to file %s", data_norm_file)
+        write.table(
+            data.frame("feature" = rownames(features), 
+                        features, 
+                        check.names = FALSE),
+            file = data_norm_file,
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE
+        )
+    }
+
+    return(features)
+}
+
+
+########################################################################
+# Filter data based on min abundance, min prevalence, and min variance #
+########################################################################
+
+maaslin_filter <- function(normalized_data,
+                        output,
+                        min_abundance = 0,
+                        min_prevalence = 0,
+                        zero_threshold = 0,
+                        min_variance = 0) {
+    unfiltered_data <- normalized_data
+
+    # require at least total samples * min prevalence values
+    # for each feature to be greater than min abundance
+    logging::loginfo("Filter data based on min abundance and min prevalence")
+    total_samples <- nrow(unfiltered_data)
+    logging::loginfo("Total samples in data: %d", total_samples)
+    min_samples <- total_samples * min_prevalence
+    logging::loginfo(
+        paste(
+            "Min samples required with min abundance",
+            "for a feature not to be filtered: %f"
+        ),
+        min_samples
+    )
+
+    # Filter by abundance
+    data_zeros <- unfiltered_data
+    data_zeros[is.na(data_zeros)] <-
+        min(min_abundance, zero_threshold) - 1
+
+    ##########################################
+    # Apply the non-zero abundance threshold #
+    ##########################################
+
+    prevalence_mask <- ifelse(data_zeros > zero_threshold, 1, 0)
+    data_zeros <- data_zeros * prevalence_mask
+
+    filtered_data <-
+        unfiltered_data[, colSums(data_zeros > min_abundance) > min_samples,
+                        drop = FALSE]
+    total_filtered_features <-
+        ncol(unfiltered_data) - ncol(filtered_data)
+    logging::loginfo("Total filtered features: %d", total_filtered_features)
+    filtered_feature_names <-
+        setdiff(names(unfiltered_data), names(filtered_data))
+    logging::loginfo(
+        "Filtered feature names from abundance and prevalence filtering: %s",
+        toString(filtered_feature_names)
+    )
+
+    #################################
+    # Filter data based on variance #
+    #################################
+
+    vars <- apply(filtered_data, 2, var, na.rm = TRUE)
+    variance_filtered_data <-
+        filtered_data[, which(vars > min_variance), drop = FALSE]
+    variance_filtered_features <-
+        ncol(filtered_data) - ncol(variance_filtered_data)
+    logging::loginfo(
+        "Total features filtered by non-zero variance filtering: %d",
+        variance_filtered_features)
+    variance_filtered_feature_names <-
+        setdiff(names(filtered_data), names(variance_filtered_data))
+    logging::loginfo(
+        "Filtered feature names from variance filtering: %s",
+        toString(variance_filtered_feature_names)
+    )
+    filtered_data <- variance_filtered_data
+
+    #######################
+    # Write filtered data #
+    #######################
+
+    if (!is.null(output)) {
+        features_folder <- file.path(output, "features")
+        if (!file.exists(features_folder)) {
+            logging::loginfo("Creating output feature tables folder")
+            dir.create(features_folder, recursive = TRUE)
+        }
+
+        filtered_file <- file.path(features_folder, "study.tsv")
+        logging::loginfo("Writing filtered data to file %s", filtered_file)
+        write.table(
+            data.frame("feature" = rownames(filtered_data), 
+                        filtered_data, 
+                        check.names = FALSE),
+            file = filtered_file,
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE
+        )
+    }
+
+    return(filtered_data)
+}
+
+#######################################
+# Filter and standardize the metadata #
+#######################################
+
+maaslin_process_metadata <- function(metadata,
+                                    formula = NULL,
+                                    fixed_effects = NULL,
+                                    reference = NULL,
+                                    feature_specific_covariate_name = NULL,
+                                    standardize = TRUE) {
+    if (is.null(reference)) {
+        reference <- ","
+    }
+    split_reference <- unlist(strsplit(reference, "[,;]"))
+
+    # Extract fixed effects from formula if null
+    if (is.null(fixed_effects)) {
+        term_labels <- attr(terms(formula), "term.labels")
+        term_labels <-
+            term_labels[!grepl("group|ordered|strata|\\|", term_labels)]
+        if (length(term_labels) == 0) {
+            term_labels <- '1'
+        }
+        tmp_formula <-
+            formula(paste0("~ ", paste0(term_labels, collapse = " + ")))
+        formula_terms <- all.vars(tmp_formula)
+        if (is.null(feature_specific_covariate_name)) {
+            fixed_effects <- formula_terms
+        } else {
+            fixed_effects <-
+                formula_terms[formula_terms != feature_specific_covariate_name]
+        }
+    }
+
+    # for each fixed effect, check that a
+    # reference level has been set if necessary:
+    # number of levels > 2 and metadata isn't already an ordered factor
+    for (i in fixed_effects) {
+        # don't check for or require reference levels for numeric metadata
+        if (is.numeric(metadata[, i])) {
+            next
+        }
+        # respect ordering if a factor is
+        # explicitly passed in with no reference set
+        if (is.factor(metadata[, i]) && !(i %in% split_reference)) {
+            logging::loginfo(
+                paste(
+                    "Factor detected for categorial metadata '",
+                    i,
+                    "'. Using as-is.",
+                    sep = ""
+                )
+            )
+            next
+        }
+
+        # set metadata as a factor (ordered alphabetically)
+        metadata[, i] <- as.factor(metadata[, i])
+        mlevels <- levels(metadata[, i])
+
+        # get reference level for variable being considered,
+        # returns NA if not found
+        ref <- split_reference[match(i, split_reference) + 1]
+
+        # if metadata has 2 levels, allow but don't require
+        # setting reference level, otherwise require it
+        if ((length(mlevels) == 2)) {
+            if (!is.na(ref)) {
+                metadata[, i] <- relevel(metadata[, i], ref = ref)
+            }
+        } else if (length(mlevels) > 2) {
+            if (!is.na(ref)) {
+                metadata[, i] <- relevel(metadata[, i], ref = ref)
+            } else {
+                stop(
+                    paste(
+                        "Please provide the reference for the variable '",
+                        i,
+                        "' which includes more than 2 levels: ",
+                        paste(as.character(mlevels), collapse = ", "),
+                        ". ",
+                        "Alternatively, set the variable as
+                        a factor beforehand.",
+                        sep = ""
+                    )
+                )
+            }
+        } else {
+            stop("Provided categorical metadata has
+                fewer than 2 unique, non-NA values.")
+        }
+    }
+
+    ################################
+    # Standardize metadata, if set #
+    ################################
+
+    if (standardize) {
+        logging::loginfo("Applying z-score to standardize continuous metadata")
+        metadata <- metadata %>% dplyr::mutate_if(is.numeric, scale)
+    } else {
+        logging::loginfo("Bypass z-score application to metadata")
+    }
+
+    return(metadata)
+}
+
+##################
+# Transformation #
+##################
+
+maaslin_transform <- function(filtered_data,
+                            output,
+                            transform = 'LOG') {
+    match.arg(transform, transform_choices)
+
+    features <- filtered_data
+
+    logging::loginfo("Running selected transform method: %s", transform)
+
+    if (transform == 'LOG') {
+        features <- LOG(features)
+    }
+    if (transform == 'PLOG') {
+        features <- PLOG(features)
+    }
+
+    if (!is.null(output)) {
+        features_folder <- file.path(output, "features")
+        if (!file.exists(features_folder)) {
+            logging::loginfo("Creating output feature tables folder")
+            dir.create(features_folder, recursive = TRUE)
+        }
+
+        filtered_data_norm_transformed_file <-
+            file.path(features_folder, "study.tsv")
+        logging::loginfo(
+            "Writing normalized, filtered, transformed data to file %s",
+            filtered_data_norm_transformed_file
+        )
+        write.table(
+            data.frame("feature" = rownames(features), 
+                        features, 
+                        check.names = FALSE),
+            file = filtered_data_norm_transformed_file,
+            sep = "\t",
+            quote = FALSE,
+            row.names = FALSE
+        )
+    }
+
+    return(features)
+}
+
+##############
+# Fit models #
+##############
+
+maaslin_fit <- function(filtered_data,
+                        transformed_data,
+                        metadata,
+                        formula,
+                        random_effects_formula,
+                        feature_specific_covariate = NULL,
+                        feature_specific_covariate_name = NULL,
+                        feature_specific_covariate_record = NULL,
+                        zero_threshold = 0,
+                        max_significance = 0.1,
+                        correction = 'BH',
+                        median_comparison_abundance = TRUE,
+                        median_comparison_prevalence = FALSE,
+                        median_comparison_abundance_threshold = 0,
+                        median_comparison_prevalence_threshold = 0,
+                        subtract_median = FALSE,
+                        warn_prevalence = TRUE,
+                        small_random_effects = FALSE,
+                        augment = TRUE,
+                        evaluate_only = NULL,
+                        cores = 1,
+                        save_models = FALSE,
+                        data = NULL,
+                        min_abundance = 0,
+                        min_prevalence = 0,
+                        min_variance = 0) {
+
+    match.arg(correction, correction_choices)
+
+    if (!is.null(feature_specific_covariate)) {
+        tryCatch({
+            feature_specific_covariate <-
+                feature_specific_covariate[rownames(filtered_data),
+                                        colnames(filtered_data)]
+        }, error = function(e) {
+            stop(
+                "feature_specific_covariate does not contain the
+                features and samples of the filtered data."
+            )
+        })
+    }
+
+    # Match variable ignoring case then set correctly as required for p.adjust
+    correction <- correction_choices[match(toupper(correction),
+                                        toupper(correction_choices))]
+
+    # Run linear model component
+    if (is.null(evaluate_only) || evaluate_only == "abundance") {
+        logging::loginfo("Running the linear model component")
+        prevalence_mask <- ifelse(!is.na(filtered_data), 1, 0)
+
+        #######################
+        # For non-zero models #
+        #######################
+
+        fit_data_abundance <-
+            fit.model(
+                features = transformed_data,
+                metadata = metadata,
+                model = 'linear',
+                formula = formula,
+                random_effects_formula = random_effects_formula,
+                correction = correction,
+                save_models = save_models,
+                small_random_effects = small_random_effects,
+                augment = augment,
+                cores = cores,
+                median_comparison = median_comparison_abundance,
+                median_comparison_threshold =
+                    median_comparison_abundance_threshold,
+                subtract_median = subtract_median,
+                feature_specific_covariate = feature_specific_covariate,
+                feature_specific_covariate_name =
+                    feature_specific_covariate_name,
+                feature_specific_covariate_record =
+                    feature_specific_covariate_record
+            )
+
+        #################################################################
+        # Count the total values for each feature (untransformed space) #
+        #################################################################
+
+        logging::loginfo("Counting total values for each feature")
+
+        fit_data_abundance$results$N <-
+            apply(
+                fit_data_abundance$results,
+                1,
+                FUN = function(x)
+                    length(prevalence_mask[, x[1]])
+            )
+        fit_data_abundance$results$N_not_zero <-
+            apply(
+                fit_data_abundance$results,
+                1,
+                FUN = function(x)
+                    length(which(prevalence_mask[, x[1]] == 1))
+            )
+
+    }
+
+    # Run logistic model component
+    if (is.null(evaluate_only) || evaluate_only == "prevalence") {
+        #####################
+        # For binary models #
+        #####################
+
+        logging::loginfo("Running the logistic model component")
+
+        prevalence_mask <- ifelse(!is.na(filtered_data), 1, 0)
+
+        fit_data_prevalence <-
+            fit.model(
+                features = prevalence_mask,
+                metadata = metadata,
+                model = 'logistic',
+                formula = formula,
+                random_effects_formula = random_effects_formula,
+                correction = correction,
+                save_models = save_models,
+                small_random_effects = small_random_effects,
+                augment = augment,
+                cores = cores,
+                median_comparison = median_comparison_prevalence,
+                median_comparison_threshold =
+                    median_comparison_prevalence_threshold,
+                subtract_median = subtract_median,
+                feature_specific_covariate = feature_specific_covariate,
+                feature_specific_covariate_name =
+                    feature_specific_covariate_name,
+                feature_specific_covariate_record =
+                    feature_specific_covariate_record
+            )
+
+        logging::loginfo("Counting total values for each feature")
+
+        fit_data_prevalence$results$N <-
+            apply(
+                fit_data_prevalence$results,
+                1,
+                FUN = function(x)
+                    length(prevalence_mask[, x[1]])
+            )
+        fit_data_prevalence$results$N_not_zero <-
+            apply(
+                fit_data_prevalence$results,
+                1,
+                FUN = function(x)
+                    length(which(prevalence_mask[, x[1]] == 1))
+            )
+    }
+
+    # Check for highly significant likely model misfits
+    if (is.null(evaluate_only) || evaluate_only == "prevalence") {
+        current_likely_error_subsetter <-
+            !is.na(fit_data_prevalence$results$N_not_zero) &
+            (
+                fit_data_prevalence$results$N_not_zero < 50 &
+                    fit_data_prevalence$results$N_not_zero /
+                    fit_data_prevalence$results$N < 0.05
+            ) &
+            ((
+                !is.na(fit_data_prevalence$results$coef) &
+                    abs(fit_data_prevalence$results$coef) > 15
+            ) |
+                (
+                    !is.na(fit_data_prevalence$results$pval) &
+                        fit_data_prevalence$results$pval < 10 ^ -10
+                )
+            )
+        current_errors_for_likely_issues <-
+            fit_data_prevalence$results$error[current_likely_error_subsetter]
+        fit_data_prevalence$results$error[current_likely_error_subsetter] <-
+            ifelse(
+                !is.na(current_errors_for_likely_issues),
+                current_errors_for_likely_issues,
+                "A large coefficient (>15 in absolute value) or small
+                p-value (< 10^-10) was obtained from a feature present
+                in <5% of samples. Check this is intended."
+            )
+
+        current_likely_error_subsetter <-
+            !is.na(fit_data_prevalence$results$N_not_zero) &
+            (
+                fit_data_prevalence$results$N -
+                    fit_data_prevalence$results$N_not_zero < 50 &
+                    fit_data_prevalence$results$N_not_zero /
+                    fit_data_prevalence$results$N > 0.95
+            ) &
+            ((
+                !is.na(fit_data_prevalence$results$coef) &
+                    abs(fit_data_prevalence$results$coef) > 15
+            ) |
+                (
+                    !is.na(fit_data_prevalence$results$pval) &
+                        fit_data_prevalence$results$pval < 10 ^ -10
+                )
+            )
+        current_errors_for_likely_issues <-
+            fit_data_prevalence$results$error[current_likely_error_subsetter]
+        fit_data_prevalence$results$error[current_likely_error_subsetter] <-
+            ifelse(
+                !is.na(current_errors_for_likely_issues),
+                current_errors_for_likely_issues,
+                "A large coefficient (>15 in absolute value) or small p-value
+                (< 10^-10) was obtained from a feature present in >95% of
+                samples. Check this is intended."
+            )
+    } else {
+        fit_data_prevalence <- NULL
+    }
+
+    results <- add_qvals(fit_data_abundance,
+                        fit_data_prevalence,
+                        correction)
+    fit_data_abundance$results <- results[[1]]
+    fit_data_prevalence$results <- results[[2]]
+
+    # Warn about prevalence associations induced by abundances changes
+    if (warn_prevalence) {
+        logging::loginfo("Re-running abundances for warn_prevalence")
+
+        if (!is.null(evaluate_only)) {
+            stop_message <- "evaluate_only must be null with warn_prevalence"
+            stop(stop_message)
+        }
+
+        if (is.null(data)) {
+            stop_message <- "For warn_prevalence, data must not be null"
+            stop(stop_message)
+        }
+
+        new_normalized_data <- maaslin_normalize(data,
+                                                NULL,
+                                                zero_threshold,
+                                                "TSS",
+                                                NULL)
+
+        if (is.null(min_abundance) |
+            is.null(min_prevalence) |
+            is.null(min_variance)) {
+            stop_message <- paste0("For warn_prevalence, min_abundance, ",
+                        "min_prevalence, and min_variance must not be null")
+            stop(stop_message)
+        }
+
+        new_filtered_data <- new_normalized_data[rownames(transformed_data),
+                                                colnames(transformed_data)]
+
+        new_transformed_data <- maaslin_transform(new_filtered_data,
+                                                    NULL,
+                                                    'LOG')
+
+        # Run TSS LOG no median comparison model
+        new_fit_data_abundance <-
+            fit.model(
+                features = new_transformed_data,
+                metadata = metadata,
+                model = 'linear',
+                formula = formula,
+                random_effects_formula = random_effects_formula,
+                correction = correction,
+                save_models = save_models,
+                small_random_effects = small_random_effects,
+                augment = augment,
+                cores = cores,
+                median_comparison = FALSE,
+                median_comparison_threshold = 0,
+                subtract_median = FALSE,
+                feature_specific_covariate = feature_specific_covariate,
+                feature_specific_covariate_name =
+                    feature_specific_covariate_name,
+                feature_specific_covariate_record =
+                    feature_specific_covariate_record
+            )
+
+        results <- add_qvals(new_fit_data_abundance,
+                            fit_data_prevalence,
+                            correction)
+        new_fit_data_abundance$results <- results[[1]]
+
+        results <-
+            add_joint_signif(fit_data_abundance,
+                            fit_data_prevalence,
+                            new_fit_data_abundance,
+                            max_significance,
+                            correction)
+
+        fit_data_abundance$results <- results[[1]]
+        fit_data_prevalence$results <- results[[2]]
+    } else {
+        # Add in joint p/q-values
+        if (is.null(evaluate_only)) {
+            results <-
+                add_joint_signif(fit_data_abundance,
+                                fit_data_prevalence,
+                                NULL,
+                                max_significance,
+                                correction)
+            fit_data_abundance$results <- results[[1]]
+            fit_data_prevalence$results <- results[[2]]
+        } else if (evaluate_only == 'abundance') {
+            fit_data_abundance$results$pval_joint <-
+                fit_data_abundance$results$pval
+            fit_data_abundance$results$qval_joint <-
+                fit_data_abundance$results$qval
+            fit_data_abundance$results <- fit_data_abundance$results %>%
+                dplyr::rename(pval_individual = .data$pval,
+                            qval_individual = .data$qval)
+        } else if (evaluate_only == 'prevalence') {
+            fit_data_prevalence$results$pval_joint <-
+                fit_data_prevalence$results$pval
+            fit_data_prevalence$results$qval_joint <-
+                fit_data_prevalence$results$qval
+            fit_data_prevalence$results <-
+                fit_data_prevalence$results %>%
+                dplyr::rename(pval_individual = .data$pval,
+                            qval_individual = .data$qval)
+        }
+    }
+    
+    if (!is.null(fit_data_prevalence)) {
+        if (!is.null(random_effects_formula)) {
+            bars <- lme4::findbars(random_effects_formula)
+            random_names <- vapply(bars, function(x) deparse(x[[3]]), 
+                FUN.VALUE = character(1))
+            for (random_name in random_names) {
+                random_table <- table(metadata[random_name])
+                random_table <- random_table[random_table > 0]
+                if (mean(random_table) < 4 & !small_random_effects) {
+                    fit_data_prevalence$results$error <- 
+                        ifelse(is.na(fit_data_prevalence$results$error),
+    paste0("<4 average observations per random effect group often inflates ",
+        "coefficients and deflates p-values: consider setting ",
+        "small_random_effects=TRUE and see tutorial"), 
+    fit_data_prevalence$results$error)
+                }
+            }
+        }
+    }
+
+    # Set column order
+    col_order <- c("feature", "metadata", "value", "name", "coef", 
+                    "null_hypothesis", "stderr",
+                    "pval_individual", "qval_individual", "pval_joint",
+                    "qval_joint", "error", "model", "N", "N_not_zero")
+
+    # Reorder outputs
+    if (is.null(evaluate_only) || evaluate_only == "abundance") {
+        fit_data_abundance$results <-
+            fit_data_abundance$results[
+                order(fit_data_abundance$results$qval_individual), ]
+        # Move all that had errors to the end
+        fit_data_abundance$results <-
+            fit_data_abundance$results[
+                order(!is.na(fit_data_abundance$results$error)), ]
+
+        # Reorder columns
+        fit_data_abundance$results <- fit_data_abundance$results[,col_order]
+    } else {
+        fit_data_abundance <- NULL
+    }
+
+    if (is.null(evaluate_only) || evaluate_only == "prevalence") {
+        fit_data_prevalence$results <-
+            fit_data_prevalence$results[
+                order(fit_data_prevalence$results$qval_individual), ]
+        # Move all that had errors to the end
+        fit_data_prevalence$results <-
+            fit_data_prevalence$results[
+                order(!is.na(fit_data_prevalence$results$error)), ]
+
+        # Reorder columns
+        fit_data_prevalence$results <- fit_data_prevalence$results[,col_order]
+    } else {
+        fit_data_prevalence <- NULL
+    }
+
+    return(
+        list(
+            "fit_data_abundance" = fit_data_abundance,
+            "fit_data_prevalence" = fit_data_prevalence
+        )
+    )
+}
+
+###########################
+# Write tables of results #
+###########################
+
+maaslin_write_results <- function(output,
+                                fit_data_abundance,
+                                fit_data_prevalence,
+                                random_effects_formula = NULL,
+                                max_significance = 0.1,
+                                save_models = FALSE) {
+    # create an output folder if it does not exist
+    if (!file.exists(output)) {
+        logging::loginfo("Creating output folder")
+        dir.create(output)
+    }
+
+    write_fits(
+        output,
+        fit_data_abundance,
+        fit_data_prevalence,
+        random_effects_formula,
+        save_models
+    )
+
+    write_results(output,
+                fit_data_abundance,
+                fit_data_prevalence,
+                max_significance)
+}
+
+maaslin_write_results_lefse_format <- function(output,
+                                            fit_data_abundance,
+                                            fit_data_prevalence) {
+    # create an output folder if it does not exist
+    if (!file.exists(output)) {
+        logging::loginfo("Creating output folder")
+        dir.create(output)
+    }
+
+    if (!is.null(fit_data_abundance$results)) {
+        write_results_in_lefse_format(
+            fit_data_abundance$results,
+            file.path(output, 'lefse_style_results_abundance.res')
+        )
+    }
+    if (!is.null(fit_data_prevalence$results)) {
+        write_results_in_lefse_format(
+            fit_data_prevalence$results,
+            file.path(output, 'lefse_style_results_prevalence.res')
+        )
+    }
+}
+
+#######################################################
+# Create visualizations for results passing threshold #
+#######################################################
+
+maaslin_plot_results <- function(output,
+                                transformed_data,
+                                unstandardized_metadata,
+                                fit_data_abundance,
+                                fit_data_prevalence,
+                                normalization,
+                                transform,
+                                feature_specific_covariate = NULL,
+                                feature_specific_covariate_name = NULL,
+                                feature_specific_covariate_record = NULL,
+                                median_comparison_abundance = TRUE,
+                                median_comparison_prevalence = FALSE,
+                                max_significance = 0.1,
+                                plot_summary_plot = TRUE,
+                                summary_plot_first_n = 25,
+                                coef_plot_vars = NULL,
+								min_beta = NULL,
+                                heatmap_vars = NULL,
+                                plot_associations = TRUE,
+                                max_pngs = 30,
+                                balanced = FALSE,
+                                save_plots_rds = FALSE) {
+    ret_plots <- list()
+    # create an output folder and figures folder if it does not exist
+    if (!file.exists(output)) {
+        logging::loginfo("Creating output folder")
+        dir.create(output)
+    }
+    if (plot_summary_plot || plot_associations) {
+        figures_folder <- file.path(output, "figures")
+        if (!file.exists(figures_folder)) {
+            logging::loginfo("Creating output figures folder")
+            dir.create(figures_folder)
+        }
+    }
+
+    if (is.null(fit_data_abundance$results)) {
+        merged_results <- fit_data_prevalence$results
+    } else if (is.null(fit_data_prevalence$results)) {
+        merged_results <- fit_data_abundance$results
+    } else {
+        merged_results <- rbind(fit_data_abundance$results,
+                                fit_data_prevalence$results)
+    }
+
+    # Summary plot
+    if (plot_summary_plot) {
+        summary_plot_file <- file.path(figures_folder, "summary_plot.pdf")
+        logging::loginfo("Writing summary plot of significant
+                        results to file: %s",
+                        summary_plot_file)
+
+        if (!is.null(coef_plot_vars) &
+            length(coef_plot_vars) == 1) {
+            coef_plot_vars <- trimws(unlist(strsplit(coef_plot_vars, ',')))
+        }
+        if (!is.null(heatmap_vars) & length(heatmap_vars) == 1) {
+            heatmap_vars <- trimws(unlist(strsplit(heatmap_vars, ',')))
+        }
+
+        summary_plot <- maaslin3_summary_plot(
+            merged_results,
+            summary_plot_file,
+            figures_folder,
+            first_n = summary_plot_first_n,
+            max_significance = max_significance,
+            coef_plot_vars = coef_plot_vars,
+			min_beta = min_beta,
+            heatmap_vars = heatmap_vars,
+            median_comparison_abundance = median_comparison_abundance,
+            median_comparison_prevalence = median_comparison_prevalence,
+            balanced = balanced,
+            save_plots_rds = save_plots_rds
+        )
+        ret_plots[["summary_plot"]] <- summary_plot
+    }
+
+    # Individual association plots
+    if (plot_associations) {
+        logging::loginfo(
+            paste(
+                "Writing association plots",
+                "(one for each significant association)",
+                "to output folder: %s"
+            ),
+            figures_folder
+        )
+
+        plots_out <- tryCatch({
+            withCallingHandlers({
+                maaslin3_association_plots(
+                    merged_results = merged_results,
+                    metadata = unstandardized_metadata,
+                    features = transformed_data,
+                    max_significance = max_significance,
+                    figures_folder = figures_folder,
+                    max_pngs = max_pngs,
+                    normalization = normalization,
+                    transform = transform,
+                    feature_specific_covariate = feature_specific_covariate,
+                    feature_specific_covariate_name =
+                        feature_specific_covariate_name,
+                    feature_specific_covariate_record =
+                        feature_specific_covariate_record,
+                    save_plots_rds = save_plots_rds
+                )
+            },
+            warning = function(w) {
+                invokeRestart("muffleWarning")
+            })
+        })
+        ret_plots[["assocation_plots"]] <- plots_out
+    }
+    return(ret_plots)
+}
+
+maaslin_plot_results_from_output <- function(output,
+                                            metadata,
+                                            normalization,
+                                            transform,
+                                            feature_specific_covariate =
+                                                NULL,
+                                            feature_specific_covariate_name =
+                                                NULL,
+                                            feature_specific_covariate_record =
+                                                NULL,
+                                            median_comparison_abundance =
+                                                TRUE,
+                                            median_comparison_prevalence =
+                                                FALSE,
+                                            max_significance = 0.1,
+                                            plot_summary_plot = TRUE,
+                                            summary_plot_first_n = 25,
+                                            coef_plot_vars = NULL,
+                                            heatmap_vars = NULL,
+                                            plot_associations = TRUE,
+                                            max_pngs = 30,
+											min_beta = NULL,
+                                            balanced = FALSE,
+                                            save_plots_rds = FALSE) {
+    ret_plots <- list()
+
+    # create an output folder and figures folder if it does not exist
+    if (!file.exists(output)) {
+        logging::loginfo("Creating output folder")
+        dir.create(output)
+    }
+    if (plot_summary_plot || plot_associations) {
+        figures_folder <- file.path(output, "figures")
+        if (!file.exists(figures_folder)) {
+            logging::loginfo("Creating output figures folder")
+            dir.create(figures_folder)
+        }
+    }
+
+    all_results_file <-
+        paste0(gsub('/$', '', output), '/', 'study.tsv')
+    if (!file.exists(all_results_file)) {
+        stop(sprintf(
+            'Please generate the results file first: %s',
+            all_results_file
+        ))
+    }
+    merged_results <- utils::read.csv(all_results_file, sep = '\t')
+    merged_results$model[merged_results$model == 'abundance'] <- 'linear'
+    merged_results$model[merged_results$model == 'prevalence'] <- 'logistic'
+
+    # Summary plot
+    if (plot_summary_plot) {
+        summary_plot_file <- file.path(figures_folder, "summary_plot.pdf")
+        logging::loginfo("Writing summary plot of
+                        significant results to file: %s",
+                        summary_plot_file)
+
+        if (!is.null(coef_plot_vars) &
+            length(coef_plot_vars) == 1) {
+            coef_plot_vars <- trimws(unlist(strsplit(coef_plot_vars, ',')))
+        }
+        if (!is.null(heatmap_vars) & length(heatmap_vars) == 1) {
+            heatmap_vars <- trimws(unlist(strsplit(heatmap_vars, ',')))
+        }
+
+        summary_plot <- maaslin3_summary_plot(
+            merged_results,
+            summary_plot_file,
+            figures_folder,
+            first_n = summary_plot_first_n,
+            max_significance = max_significance,
+            coef_plot_vars = coef_plot_vars,
+			min_beta = min_beta,
+            heatmap_vars = heatmap_vars,
+            median_comparison_abundance = median_comparison_abundance,
+            median_comparison_prevalence = median_comparison_prevalence,
+            balanced = balanced,
+            save_plots_rds = save_plots_rds
+        )
+        ret_plots[["summary_plot"]] <- summary_plot
+    }
+
+    # Individual associations
+    if (plot_associations) {
+        features_file <-
+            paste0(gsub('/$', '', output),
+                '/',
+                'features/study.tsv')
+        if (!file.exists(features_file)) {
+            stop(sprintf(
+                'Please generate the results file first: %s',
+                features_file
+            ))
+        }
+        transformed_data <-
+            utils::read.csv(
+                features_file,
+                sep = '\t',
+                row.names = 1, 
+                check.names = FALSE
+            )
+
+        logging::loginfo(
+            paste(
+                "Writing association plots",
+                "(one for each significant association)",
+                "to output folder: %s"
+            ),
+            figures_folder
+        )
+
+        # Need to redo this if not fitting the model
+        if (!is.null(feature_specific_covariate)) {
+            tryCatch({
+                feature_specific_covariate <-
+                    feature_specific_covariate[rownames(transformed_data),
+                                            colnames(transformed_data)]
+            }, error = function(e) {
+                stop(
+                    "feature_specific_covariate does not contain the features
+                    and samples of the filtered data."
+                )
+            })
+        }
+
+        if (missing("normalization") |
+            missing("transform") | missing("metadata")) {
+            stop(
+                "Missing normalization, transform, or metadata argument to
+                maaslin_plot_results_from_output"
+            )
+        }
+
+        plots_out <- tryCatch({
+            withCallingHandlers({
+                maaslin3_association_plots(
+                    merged_results = merged_results,
+                    metadata = metadata,
+                    features = transformed_data,
+                    max_significance = max_significance,
+                    figures_folder = figures_folder,
+                    max_pngs = max_pngs,
+                    normalization = normalization,
+                    transform = transform,
+                    feature_specific_covariate = feature_specific_covariate,
+                    feature_specific_covariate_name =
+                        feature_specific_covariate_name,
+                    feature_specific_covariate_record =
+                        feature_specific_covariate_record,
+                    save_plots_rds = save_plots_rds
+                )
+            },
+            warning = function(w) {
+                invokeRestart("muffleWarning")
+            })
+        })
+        ret_plots[["assocation_plots"]] <- plots_out
+    }
+
+    if ('logging::writeToFile' %in% names(logging::getLogger()[['handlers']])) {
+        logging::removeHandler('logging::writeToFile')
+    }
+
+    return(ret_plots)
+}
+
+##########################################################
+# Main maaslin3 function (defaults same as command line) #
+##########################################################
+
+maaslin3 <- function(input_data,
+                    input_metadata = NULL,
+                    output,
+                    formula = NULL,
+                    fixed_effects = NULL,
+                    reference = NULL,
+                    random_effects = NULL,
+                    group_effects = NULL,
+                    ordered_effects = NULL,
+                    strata_effects = NULL,
+                    feature_specific_covariate = NULL,
+                    feature_specific_covariate_name = NULL,
+                    feature_specific_covariate_record = NULL,
+                    min_abundance = 0,
+                    min_prevalence = 0,
+                    zero_threshold = 0,
+                    min_variance = 0,
+                    max_significance = 0.1,
+                    normalization = 'TSS',
+                    transform = 'LOG',
+                    correction = 'BH',
+                    standardize = TRUE,
+                    unscaled_abundance = NULL,
+                    median_comparison_abundance = TRUE,
+                    median_comparison_prevalence = FALSE,
+                    median_comparison_abundance_threshold = 0,
+                    median_comparison_prevalence_threshold = 0,
+                    subtract_median = FALSE,
+                    warn_prevalence = TRUE,
+                    small_random_effects = FALSE,
+                    augment = TRUE,
+                    evaluate_only = NULL,
+                    plot_summary_plot = TRUE,
+                    summary_plot_first_n = 25,
+                    coef_plot_vars = NULL,
+                    heatmap_vars = NULL,
+                    plot_associations = TRUE,
+                    max_pngs = 30,
+                    cores = 1,
+                    save_models = FALSE,
+                    save_plots_rds = FALSE,
+                    verbosity = 'FINEST',
+                    summary_plot_balanced = FALSE,
+                    assay.type = 1) {
+    match.arg(verbosity, c("FINEST", "FINER", "FINE", "DEBUG", "INFO",
+                            "WARN", "ERROR"))
+    logging::logReset()
+
+    # Allow for lower case variables
+    normalization <- toupper(normalization)
+    transform <- toupper(transform)
+
+    # Match variable ignoring case then set correctly as required for p.adjust
+    correction <- correction_choices[match(toupper(correction),
+                                        toupper(correction_choices))]
+
+    # If formula is a formula object, convert it back to a string
+    if (methods::is(formula, "formula")) {
+        formula <- paste0(trimws(deparse(formula)), collapse = " ")
+    }
+
+    if (inherits(input_data, "SummarizedExperiment")) {
+        summarized_experiment_out <-
+            maaslin_read_summarized_experiment_data(input_data, assay.type)
+
+        input_data <- summarized_experiment_out[['data']]
+        input_metadata <- summarized_experiment_out[['metadata']]
+    }
+
+    # Create log file, log arguments, and check arguments
+    maaslin_log_arguments(
+        input_data,
+        input_metadata,
+        output,
+        formula,
+        fixed_effects,
+        reference,
+        random_effects,
+        group_effects,
+        ordered_effects,
+        strata_effects,
+        feature_specific_covariate,
+        feature_specific_covariate_name,
+        feature_specific_covariate_record,
+        min_abundance,
+        min_prevalence,
+        zero_threshold,
+        min_variance,
+        max_significance,
+        normalization,
+        transform,
+        correction,
+        standardize,
+        unscaled_abundance,
+        median_comparison_abundance,
+        median_comparison_prevalence,
+        median_comparison_abundance_threshold,
+        median_comparison_prevalence_threshold,
+        subtract_median,
+        warn_prevalence,
+        small_random_effects,
+        augment,
+        evaluate_only,
+        plot_summary_plot,
+        summary_plot_first_n,
+        coef_plot_vars,
+        heatmap_vars,
+        plot_associations,
+        max_pngs,
+        cores,
+        save_models,
+        save_plots_rds,
+        verbosity,
+        summary_plot_balanced
+    )
+
+    # Read data in
+    read_data_list <- maaslin_read_data(input_data,
+                                        input_metadata,
+                                        feature_specific_covariate,
+                                        unscaled_abundance)
+
+    # Set ordering of samples correctly
+    read_data_list <- maaslin_reorder_data(
+        read_data_list$data,
+        read_data_list$metadata,
+        read_data_list$feature_specific_covariate,
+        read_data_list$unscaled_abundance
+    )
+
+    data <- read_data_list$data
+    metadata <- read_data_list$metadata
+    unscaled_abundance <- read_data_list$unscaled_abundance
+    feature_specific_covariate <-
+        read_data_list$feature_specific_covariate
+
+    # Compute or check formula
+    if (is.null(formula)) {
+        formulas <- maaslin_compute_formula(
+            data,
+            metadata,
+            fixed_effects,
+            random_effects,
+            group_effects,
+            ordered_effects,
+            strata_effects,
+            feature_specific_covariate_name
+        )
+    } else {
+        if (!is.null(fixed_effects) | 
+            !is.null(random_effects) | !is.null(group_effects) | 
+            !is.null(ordered_effects) | !is.null(strata_effects)) {
+            check_null_error <- paste0("random_effects, group_effects, ",
+            "ordered_effects, and strata_effects must be NULL ",
+            "when formula is not NULL")
+            stop(check_null_error)
+        }
+
+        formulas <- maaslin_check_formula(data,
+                                        metadata,
+                                        formula,
+                                        feature_specific_covariate_name)
+    }
+
+    formula <- formulas$formula
+    random_effects_formula <- formulas$random_effects_formula
+
+    # Normalize data
+    normalized_data <- maaslin_normalize(data,
+                                        output,
+                                        zero_threshold,
+                                        normalization,
+                                        unscaled_abundance)
+
+    # Filter data
+    filtered_data <- maaslin_filter(
+        normalized_data,
+        output,
+        min_abundance,
+        min_prevalence,
+        zero_threshold,
+        min_variance
+    )
+
+    # Transform data
+    transformed_data <- maaslin_transform(filtered_data,
+                                        output,
+                                        transform)
+
+    # Process metadata
+    standardized_metadata <- maaslin_process_metadata(
+        metadata,
+        formula,
+        fixed_effects,
+        reference,
+        feature_specific_covariate_name,
+        standardize
+    )
+
+    # Fit models
+    maaslin_results <- maaslin_fit(
+        filtered_data,
+        transformed_data,
+        standardized_metadata,
+        formula,
+        random_effects_formula,
+        feature_specific_covariate,
+        feature_specific_covariate_name,
+        feature_specific_covariate_record,
+        zero_threshold,
+        max_significance,
+        correction,
+        median_comparison_abundance,
+        median_comparison_prevalence,
+        median_comparison_abundance_threshold,
+        median_comparison_prevalence_threshold,
+        subtract_median,
+        warn_prevalence,
+        small_random_effects,
+        augment,
+        evaluate_only,
+        cores,
+        save_models = TRUE,
+        data,
+        min_abundance,
+        min_prevalence,
+        min_variance
+    )
+
+    # Write results
+    maaslin_write_results(
+        output,
+        maaslin_results$fit_data_abundance,
+        maaslin_results$fit_data_prevalence,
+        random_effects_formula,
+        max_significance,
+        save_models
+    )
+
+    # Plot outputs
+    if (plot_summary_plot | plot_associations) {
+        tryCatch({
+            withCallingHandlers({
+                maaslin_plot_results(
+                    output,
+                    transformed_data,
+                    metadata,
+                    maaslin_results$fit_data_abundance,
+                    maaslin_results$fit_data_prevalence,
+                    normalization,
+                    transform,
+                    feature_specific_covariate,
+                    feature_specific_covariate_name,
+                    feature_specific_covariate_record,
+                    median_comparison_abundance,
+                    median_comparison_prevalence,
+                    max_significance,
+                    plot_summary_plot,
+                    summary_plot_first_n,
+                    coef_plot_vars,
+                    heatmap_vars,
+                    plot_associations,
+                    max_pngs,
+                    summary_plot_balanced,
+                    save_plots_rds
+                )
+            },
+            warning = function(w) {
+                invokeRestart("muffleWarning")
+            })
+        })
+    }
+
+    if ('logging::writeToFile' %in% names(logging::getLogger()[['handlers']])) {
+        logging::removeHandler('logging::writeToFile')
+    }
+
+    return(
+        list(
+            "data" = data,
+            "normalized_data" = normalized_data,
+            "filtered_data" = filtered_data,
+            "transformed_data" = transformed_data,
+            "metadata" = metadata,
+            "standardized_metadata" = standardized_metadata,
+            "formula" = formulas,
+            "fit_data_abundance" = maaslin_results$fit_data_abundance,
+            "fit_data_prevalence" = maaslin_results$fit_data_prevalence
+        )
+    )
+}
+
+###########################################################################
+# If running on the command line, get arguments and call maaslin function #
+###########################################################################
+
+# this evaluates to true if script is being called directly as an executable
+if (identical(environment(), globalenv()) &&
+    !length(grep("^source\\(", sys.calls()))) {
+
+    # get command line options and positional arguments
+    parsed_arguments <- optparse::parse_args(options,
+                                            positional_arguments = TRUE)
+    current_args <- parsed_arguments[["options"]]
+    positional_args <- parsed_arguments[["args"]]
+    # check three positional arguments are provided
+    if (length(positional_args) != 3) {
+        optparse::print_help(options)
+        stop(
+            sprintf(
+                "Please provide the required positional arguments
+                <data.tsv> <metadata.tsv> <output_folder>"
+            )
+        )
+    }
+
+    # call maaslin with the command line options
+    fit_data <-
+        maaslin3(
+            input_data = positional_args[1],
+            input_metadata = positional_args[2],
+            output = positional_args[3],
+            min_abundance = current_args$min_abundance,
+            zero_threshold = current_args$zero_threshold,
+            min_prevalence = current_args$min_prevalence,
+            min_variance = current_args$min_variance,
+            max_significance = current_args$max_significance,
+            normalization = current_args$normalization,
+            transform = current_args$transform,
+            random_effects = current_args$random_effects,
+            fixed_effects = current_args$fixed_effects,
+            group_effects = current_args$group_effects,
+            ordered_effects = current_args$ordered_effects,
+            strata_effects = current_args$strata_effects,
+            feature_specific_covariate =
+                current_args$feature_specific_covariate,
+            feature_specific_covariate_name =
+                current_args$feature_specific_covariate_name,
+            feature_specific_covariate_record =
+                current_args$feature_specific_covariate_record,
+            median_comparison_abundance =
+                current_args$median_comparison_abundance,
+            median_comparison_prevalence =
+                current_args$median_comparison_prevalence,
+            median_comparison_abundance_threshold =
+                current_args$median_comparison_abundance_threshold,
+            median_comparison_prevalence_threshold =
+                current_args$median_comparison_prevalence_threshold,
+            subtract_median = current_args$subtract_median,
+            warn_prevalence = current_args$warn_prevalence,
+            small_random_effects = current_args$small_random_effects,
+            formula = current_args$formula,
+            correction = current_args$correction,
+            standardize = current_args$standardize,
+            cores = current_args$cores,
+            plot_summary_plot = current_args$plot_summary_plot,
+            summary_plot_first_n = current_args$summary_plot_first_n,
+            coef_plot_vars = current_args$coef_plot_vars,
+            heatmap_vars = current_args$heatmap_vars,
+            plot_associations = current_args$plot_associations,
+            max_pngs = current_args$max_pngs,
+            save_models = current_args$save_models,
+            save_plots_rds = current_args$save_plots_rds,
+            augment = current_args$augment,
+            evaluate_only = current_args$evaluate_only,
+            reference = current_args$reference,
+            unscaled_abundance = current_args$unscaled_abundance,
+            summary_plot_balanced = current_args$summary_plot_balanced
+        )
+}
