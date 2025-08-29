@@ -1,0 +1,221 @@
+###Mothur pipeline for processing and analysis of V4 16S rRNA amplicon data. This file is designed to be run in /scratch.global/ and will copy completed files to your permanent directory. Find and replace study for your study name and folder for a directory in your permanent folder where you want data moved. Updated 14-Mar-2025 CS##			
+
+##Following maintenance in June 2024, mothur has to be run using a compatibility script for interactive jobs: 
+##source /etc/profile
+##module load compatibility/mesabi-centos7
+##compat-start
+##module load mothur/1.44.1
+##mothur
+	
+##Unzip fastq.gz files from data_release directory -- add this line to .job file			
+#system(gzip -dc < /path/to/data_release/sample_S00_R1_001.fastq.gz > ./sample.r1.fastq)
+#system(gzip -dc < /path/to/data_release/sample_S00_R2_001.fastq.gz > ./sample.r2.fastq)			
+			
+##Cut reads to remove low quality regions.##			
+#system(cut -c1-170 sample.r1.fastq > sample.r1.cut.fastq)			
+#system(cut -c1-170 sample.r2.fastq > sample.r2.cut.fastq)			
+#system(cut -c1-170 sample.r1.fastq > sample.r1.cut.fastq)			
+#system(cut -c1-170 sample.r2.fastq > sample.r2.cut.fastq)			
+#system(cut -c1-170 sample.r1.fastq > sample.r1.cut.fastq)			
+#system(cut -c1-170 sample.r2.fastq > sample.r2.cut.fastq)			
+#system(cut -c1-170 sample.r1.fastq > sample.r1.cut.fastq)			
+#system(cut -c1-170 sample.r2.fastq > sample.r2.cut.fastq)			
+#system(cut -c1-170 sample.r1.fastq > sample.r1.cut.fastq)			
+#system(cut -c1-170 sample.r2.fastq > sample.r2.cut.fastq)			
+#system(cut -c1-170 sample.r1.fastq > sample.r1.cut.fastq)			
+#system(cut -c1-170 sample.r2.fastq > sample.r2.cut.fastq)			
+			
+##Paired-end join reads using fastq-join script. Amplicon length is approximately 255 nt##			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+#system(/home/cmstaley/username/fastq-join sample.r1.cut.fastq sample.r2.cut.fastq -o sample.fastq)			
+			
+##Rename files for use with mothur.##			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+#system(mv sample.fastqjoin sample.fastq)			
+			
+##Split fasta and qual files from fastq files.##			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+#fastq.info(fastq=sample.fastq)			
+			
+##Initial quality trimming for low quality regions and primer mismatches. Note UMGC uses a proofreading taq polymerases, so primer sequences may change slightly.##			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+#trim.seqs(fasta=sample.fasta,qfile=sample.qual,maxambig=0,maxhomop=6,qwindowsize=50,qwindowaverage=35,oligos=/home/cmstaley/username/v4_pairedend.oligos,pdiffs=2,processors=64)			
+			
+##Combine high-quality reads to make .fasta, .groups, and .names files.##			
+#merge.files(input=sample.trim.fasta-sample.trim.fasta,output=study.fasta)		
+#make.group(fasta=sample.trim.fasta-sample.trim.fasta,groups=sample1-sample2,output=study.groups)			
+#unique.seqs(fasta=study.fasta)			
+#system(cp study.fasta /home/cmstaley/username/folder/)			
+#system(cp study.groups /home/cmstaley/username/folder/)			
+#count.groups(group=study.groups)			
+			
+###Alignment database is based on SILVA ver. 138.2##			
+#align.seqs(fasta=study.unique.fasta,reference=/home/cmstaley/username/silva.138_2.v4.align,flip=T,processors=64)			
+#summary.seqs(fasta=study.unique.align,name=study.names,processors=64)			
+			
+##Remove positions outside the alignment.##			
+#screen.seqs(fasta=study.unique.align,name=study.names,group=study.groups,start=13862,end=23444,processors=64)			
+#filter.seqs(fasta=study.unique.good.align,vertical=T,trump=.,processors=64)			
+#count.groups(group=study.good.groups)			
+#unique.seqs(fasta=study.unique.good.filter.fasta,name=study.good.names)			
+			
+##Remove sequences that differ by 2% as sequence errors. [Huse, 2010]##			
+#pre.cluster(fasta=study.unique.good.filter.unique.fasta,name=study.unique.good.filter.names,group=study.good.groups,diffs=3,processors=4)			
+#system(mv study.unique.good.filter.unique.precluster.fasta study.work.fasta)			
+#system(mv study.unique.good.filter.unique.precluster.names study.work.names)			
+#system(mv study.good.groups study.work.groups)			
+			
+##Identify and remove chimeras.##			
+#chimera.uchime(fasta=study.work.fasta,name=study.work.names,group=study.work.groups,dereplicate=T,processors=4)			
+#remove.seqs(accnos=study.work.denovo.uchime.accnos,fasta=study.work.fasta,name=study.work.names,group=study.work.groups)			
+#count.groups(group=study.work.pick.groups)			
+			
+##Clean up sample names##			
+#system(mv study.work.pick.fasta study.final.fasta)			
+#system(mv study.work.pick.names study.final.names)			
+#system(mv study.work.pick.groups study.final.groups)			
+#system(cp study.final.fasta /home/cmstaley/username/folder/)			
+#system(cp study.final.groups /home/cmstaley/username/folder/)			
+#system(cp study.final.names /home/cmstaley/username/folder/)			
+			
+##Convert .names and .groups files to .count_table, if working with older datasets##			
+###count.seqs(name=study.final.names,group=study.final.groups)			
+			
+###If combining with other data##			
+###merge.files(input=xxx.fasta-xxx.fasta,output=study.final.fasta)			
+###merge.files(input=xxx.names-xxx.names,output=study.final.names)			
+###merge.files(input=xxx.groups-xxx.groups,output=study.final.groups)			
+###align.seqs(fasta=study.final.fasta,reference=/home/cmstaley/username/silva.138_2.v4.align,flip=T,processors=64)			
+###system(mv study.final.align study.final.fasta)			
+###system(cp study.final.fasta /home/cmstaley/username/folder/)			
+###system(cp study.final.groups /home/cmstaley/username/folder/)			
+###system(cp study.final.names /home/cmstaley/username/folder/)			
+			
+			
+##If removing a taxon, return here and run remove.lineage##			
+####remove.lineage(fasta=study.final.fasta,group=study.final.groups,name=study.final.names,list=study.final.opti_mcc.list,taxonomy=study.final.rdp.wang.taxonomy,taxon=Kingdom;Phylum;)			
+			
+##OTU clustering [Schloss & Westcott, 2017, mSphere]##			
+#dist.seqs(fasta=study.final.fasta,cutoff=0.01,processors=64)			
+#cluster(column=study.final.dist,name=study.final.names,cutoff=0.01,method=opti)			
+#system(cp study.final.opti_mcc.list /home/cmstaley/username/folder/)			
+#make.shared(list=study.final.opti_mcc.list,group=study.final.groups,label=0.01)			
+#summary.single(shared=study.final.opti_mcc.shared,calc=coverage)			
+#count.groups(group=study.final.groups)
+#make.clr(shared=study.final.opti_mcc.shared)
+#system(cp study.final.opti_mcc.clr /home/cmstaley/username/folder/)			
+			
+##RDP database is ver. 19##			
+#classify.seqs(fasta=study.final.fasta,method=wang,name=study.final.names,template=/home/cmstaley/username/trainset19_072023.rdp.fasta,taxonomy=/home/cmstaley/username/trainset19_072023.rdp.tax,processors=64)			
+#classify.otu(list=study.final.opti_mcc.list,name=study.final.names,taxonomy=study.final.rdp.wang.taxonomy,cutoff=60,probs=f,label=0.01)			
+#system(cp study.final.rdp.wang.taxonomy /home/cmstaley/username/folder/)			
+#system(mv study.final.opti_mcc.0.01.cons.taxonomy study.final.taxonomy)			
+#system(cp study.final.taxonomy /home/cmstaley/username/folder/)			
+#system(cp study.final.opti_mcc.shared /home/cmstaley/username/folder/)			
+#system(cp study.final.dist /home/cmstaley/username/folder/)			
+			
+##Normalization to same number of sequence reads (Gihring, et al., 2011)##			
+##Change n to the number to normalize to or delete. Default is the group with the smallest number of reads.##			
+#normalize.shared(shared=study.final.opti_mcc.shared,method=totalgroup,norm=n)			
+#system(mv study.final.opti_mcc.0.01.norm.shared study.final.norm.shared)			
+
+##Calculate phylip-formatted distance matrix and evaluate beta diversity##			
+#dist.shared(shared=study.final.norm.shared,calc=braycurtis)			
+#system(mv study.final.norm.braycurtis.0.01.lt.dist study.final.lt.dist)			
+#pcoa(phylip=study.final.lt.dist)			
+#system(cp study.final.lt.pcoa.axes /home/cmstaley/username/folder/)			
+#system(cp study.final.lt.pcoa.loadings /home/cmstaley/username/folder/)			
+#system(cp study.final.lt.dist /home/cmstaley/username/folder/)			
+#system(cp study.final.norm.shared /home/cmstaley/username/folder/)			
+#summary.single(shared=study.final.norm.shared,calc=coverage-sobs-shannon-chao)			
+#system(cp study.final.norm.groups.summary /home/cmstaley/username/folder/)			
+			
+##Create full database##			
+#get.oturep(phylip=study.final.opti_mcc.lt.dist,fasta=study.final.fasta,list=study.final.opti_mcc.list)
+#classify.seqs(fasta=study.final.opti_mcc.0.01.rep.fasta,method=wang,name=study.final.opti_mcc.0.01.rep.names,template=/home/cmstaley/username/trainset19_072023.rdp.fasta,taxonomy=/home/cmstaley/username/trainset19_072023.rdp.tax,processors=64)
+#classify.otu(list=study.final.opti_mcc.list,name=study.final.opti_mcc.0.01.rep.names,taxonomy=study.final.opti_mcc.0.01.rep.rdp.wang.taxonomy,cutoff=60,probs=f,label=0.01)
+#create.database(list=study.final.opti_mcc.list,label=0.01,repfasta=study.final.opti_mcc.0.01.rep.fasta,repname=study.final.opti_mcc.0.01.rep.names,constaxonomy=study.final.opti_mcc.0.01.cons.taxonomy)			
+#system(cp study.final.opti_mcc.database /home/cmstaley/username/folder/)	
+
+###Oligotyping###Requires installing of oligotype###
+###Reformatting mothur files for oligotyping##Note: need to get renamer.pl script###
+#count.seqs(name=study.final.names,group=study.final.groups,processors=8)
+#get.lineage(taxonomy=study.final.rdp.wang.taxonomy,taxon='Bacteria;Firmicutes;Clostridia;Clostridiales;Ruminococcaceae',count=study.final.count_table)
+#list.seqs(count=current)
+#get.seqs(accnos=current,fasta=study.final.fasta)
+#deunique.seqs(fasta=current,count=current)
+#system(cat study.final.pick.redundant.groups | sed 's/_/:/g' > intermediate1)
+#system(paste study.final.pick.redundant.groups intermediate1 | awk 'BEGIN{FS="\t"}{print $1"\t"$2"_"$3}' > intermediate2)
+#system(perl renamer.pl study.final.pick.redundant.fasta intermediate2)
+#system(mv study.final.pick.redundant.fasta_headers-replaced.fasta taxon.oligotyping.fasta)
+#system(cp taxon.oligotyping.fasta /panfs/roc/groups/8/cmstaley/username/folder/)
+#system(entropy-analysis taxon.oligotyping.fasta)
+#system(cp taxon.oligotyping.fasta-ENTROPY /panfs/roc/groups/8/cmstaley/username/folder/)
+#system(cp taxon.oligotyping.fasta-ENTROPY.pdf /panfs/roc/groups/8/cmstaley/username/folder/)
+#system(oligotype taxon.oligotyping.fasta taxon.oligotyping.fasta-ENTROPY -M 100 -a 1 -A 500 -s 10 -c 12)
+##-M minimum reads of a unique sequence; -a oligotype occurs in more than a% of reads; -A minimum actual abundance of reads; -s minimum sample prevalence; -c entropy points to use##

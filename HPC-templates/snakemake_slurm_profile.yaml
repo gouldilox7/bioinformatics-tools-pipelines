@@ -1,0 +1,32 @@
+# ----------------------------------------------------------------------------
+# Snakemake profile mapping rule resources to SLURM flags.
+# Usage: snakemake -j 200 --profile profiles/slurm
+# ----------------------------------------------------------------------------
+
+cores: 200                  # Global parallelism limit across the DAG
+rerun-incomplete: true
+printshellcmds: true
+latency-wait: 60            # Wait for NFS propagation
+keep-going: true            # Continue other jobs if one fails
+
+# Use the modern native SLURM executor (no custom wrapper script required)
+executor: slurm
+slurm:
+  account: your_account
+  partition: your_partition
+  time-min: "00:05:00"
+  extra-params: ["--export=ALL"]   # Inherit env vars
+
+# Map Snakemake resources -> SLURM flags
+# - runtime (minutes) => --time
+# - mem_mb => --mem
+# - cpus => --cpus-per-task
+
+# Template for job name and log files
+jobname: "{rule}.{wildcards}"
+cluster-status: null
+
+# Log destinations
+jobscript-jinja2: true
+cluster-cancel: null
+# Snakemake will produce logs under .snakemake/log or as configured per rule.

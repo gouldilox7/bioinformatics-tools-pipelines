@@ -1,0 +1,1 @@
+srun -N 1 --ntasks-per-node=4  --mem-per-cpu=8gb -t 12:00:00 -p interactive --pty bash

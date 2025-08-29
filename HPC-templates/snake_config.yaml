@@ -1,0 +1,52 @@
+# ============================================================================
+# config/config.yaml — Centralized knobs for paths, mapping behavior, and tools
+# ============================================================================
+
+
+# ---------- Storage roots ----------
+scratch_dir: "/scratch.global/gould209/..." # fast I/O; ephemeral
+perm_dir: "/home/gould209/..." # durable storage
+
+
+# Derived paths (use string formatting tokens defined right here)
+work_dir: "{scratch_dir}/work" # per-sample temp & merged inputs
+results_dir: "{perm_dir}" # final results (trimmed reads, QC reports)
+
+
+# ---------- Sample identity list ----------
+# Used by convention & auto-discovery modes; also to define sample universe when
+# not relying solely on the manifest.
+sample_list: "samples.txt" # one sample ID per line (S01, S02, ...)
+
+
+# ---------- Manifest mapping ----------
+# A TSV file with columns: sample, r1_path, r2_path (optional). Comma-separated
+# paths are supported for multi-lane inputs per read.
+use_manifest: true # set false to use convention/auto-discovery
+manifest: "samples.tsv" # path to your manifest
+
+
+# ---------- Input layout ----------
+layout: "paired" # "paired" | "single"
+
+
+# ---------- Convention mapping (used when not using manifest) ----------
+raw_dir: "/path/to/raw/data" # where raw FASTQs live
+r1_suffix: "_R1.fastq.gz"
+r2_suffix: "_R2.fastq.gz"
+
+
+# ---------- Auto-discovery of lanes (used when not using manifest) ----------
+# If lane files exist, they will be merged prior to fastp (by concatenation).
+lane_glob: "{sample}_L*_R{read}.fastq.gz" # tokens: {sample}, {read}=1 or 2
+
+
+# ---------- Tools / resource hints ----------
+fastp_module: "fastp/0.23.4" # set to your module name/version; or leave blank
+fastp_threads: 8 # threads per-sample for fastp
+fastp_opts: "" # extra flags if desired, e.g. "--cut_front --cut_tail"
+
+
+# Notes:
+# - Most bioinformatics tools natively read .fastq.gz; avoid full decompression.
+# - Concatenating gzip members (cat A.gz B.gz > merged.gz) is valid and fast.
