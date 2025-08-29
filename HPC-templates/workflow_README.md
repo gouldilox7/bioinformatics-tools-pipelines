@@ -2,20 +2,13 @@
 
 This repository demonstrates a robust pattern for HPC automation with SLURM and Snakemake. It emphasizes reproducibility, graceful failure handling, and efficient scheduling.
 
-## Layout
-
-
-├── env_setup.sh
-├── preflight_checks.sh
-├── job_array.sh
-├── snakemake_workflow.sh
-├── rsync.sh
-├── Snakefile
-├── config/
-│   └── snake_config.yaml
-├── profiles/
-│   └── snakemake_slurm_profile.yaml
-└── samples.txt
+## Quickstart
+1. **Edit paths** in `config/snake_config.yaml` and the scripts for your environment.
+2. **Create environment**: `source env_setup.sh`
+3. **Run checks**: `bash preflight_checks.sh`
+4. **Launch workflow**: `bash snakemake_workflow.sh`
+5. (Optional) **Manual array** demo: `sbatch --array=1-$(wc -l < samples.txt) job_array.sh samples.txt`
+6. **Sync outputs**: `bash rsync.sh`
 
 ## Input Mapping Methods
 You have **three** ways to bind `samples.txt` IDs to raw reads:
@@ -37,17 +30,10 @@ You have **three** ways to bind `samples.txt` IDs to raw reads:
 - The pipeline will **glob** per‑lane files and **merge** to per‑sample `.fastq.gz`.
 
 
-## First Real Step
+## First Step
 - `fastp` runs **directly on .fastq.gz**, producing trimmed `.fastq.gz` and reports.
 - Swap in `kneaddata` or other tools easily—most read `.gz` natively.
 
-## Quickstart
-1. **Edit paths** in `config/snake_config.yaml` and the scripts for your environment.
-2. **Create environment**: `source env_setup.sh`
-3. **Run checks**: `bash preflight_checks.sh`
-4. **Launch workflow**: `bash snakemake_workflow.sh`
-5. (Optional) **Manual array** demo: `sbatch --array=1-$(wc -l < samples.txt) job_array.sh samples.txt`
-6. **Sync outputs**: `bash rsync.sh`
 
 ## Notes
 - Replace the placeholder "compute" rule with your actual tools (fastp, kneaddata, MetaPhlAn, HUMAnN, MaAsLin3, etc.). Map tool threads to `resources.cpus`.
